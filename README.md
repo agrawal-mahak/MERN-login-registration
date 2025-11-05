@@ -101,9 +101,6 @@ Before you begin, ensure you have the following installed:
    PORT=3000
    ```
 
-   **Example MongoDB connection string:**
-   - Local: `mongodb://localhost:27017/login_app`
-   - Atlas: `mongodb+srv://username:password@cluster.mongodb.net/login_app`
 
 5. **Create a `.env` file in the root** (if needed for additional configuration)
 
@@ -249,31 +246,4 @@ The frontend uses Vite's proxy configuration to forward `/api` requests to the b
 - `tailwindcss` - CSS framework
 - `react-hot-toast` - Notifications
 - `vite` - Build tool
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the ISC License.
-
-## 👤 Author
-
-Your Name - [Your GitHub](https://github.com/yourusername)
-
-## 🙏 Acknowledgments
-
-- React team for the amazing framework
-- Express.js for the robust backend framework
-- MongoDB for the flexible database solution
-- Tailwind CSS for the utility-first CSS framework
-
----
-
-**Note:** Make sure to never commit your `.env` files to version control. The `.gitignore` file is configured to exclude these files.
 
