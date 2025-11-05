@@ -55,12 +55,20 @@ function AppContent() {
         } catch (error) {
           setError(error.response?.data?.message||"An error occurred")
           localStorage.removeItem("token")
+          setUser(null)
         }
+      } else {
+        setUser(null)
       }
     }
     
     fetchUser();
   }, [location.pathname])
+
+  const handleLogout = () => {
+    localStorage.removeItem("token")
+    setUser(null)
+  }
 
   console.log(user, 'hello boyy ------------');
   console.log(error);
@@ -68,7 +76,7 @@ function AppContent() {
   return (
     <>
       <Toaster />
-      <Navbar />
+      <Navbar user={user} onLogout={handleLogout} />
       <Routes>
         <Route path="/" element={<Home user={user} />} />
         <Route path="/login" element={<Login />} />
