@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
 import toast from 'react-hot-toast'
 
@@ -62,7 +62,50 @@ export const Home = ({ user }) => {
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState(null)
   const [newPost, setNewPost] = useState({ title: '', content: '' })
+  const [imageFile, setImageFile] = useState(null)
+  const [imagePreview, setImagePreview] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [deletingPostId, setDeletingPostId] = useState(null)
+  const [openMenuId, setOpenMenuId] = useState(null)
+  const [favoritePostIds, setFavoritePostIds] = useState(() => new Set())
+  const [editingPostId, setEditingPostId] = useState(null)
+  const [editingFields, setEditingFields] = useState({ title: '', content: '' })
+  const [editingImageFile, setEditingImageFile] = useState(null)
+  const [editingImagePreview, setEditingImagePreview] = useState(null)
+  const [removeExistingImage, setRemoveExistingImage] = useState(false)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const fileInputRef = useRef(null)
+  const editingFileInputRef = useRef(null)
+
+  useEffect(() => {
+    return () => {
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview)
+      }
+    }
+  }, [imagePreview])
+
+  useEffect(() => {
+    return () => {
+      if (editingImagePreview) {
+        URL.revokeObjectURL(editingImagePreview)
+      }
+    }
+  }, [editingImagePreview])
+
+  useEffect(() => {
+    const handleGlobalClick = (event) => {
+      if (
+        !event.target.closest('[data-post-menu-trigger]') &&
+        !event.target.closest('[data-post-menu-content]')
+      ) {
+        setOpenMenuId(null)
+      }
+    }
+
+    document.addEventListener('click', handleGlobalClick)
+    return () => document.removeEventListener('click', handleGlobalClick)
+  }, [])
 
   const fetchPosts = useCallback(async () => {
     if (!user) return
@@ -137,6 +180,43 @@ export const Home = ({ user }) => {
     return uniqueAuthors.slice(0, 5).concat(fallback).slice(0, 5)
   }, [posts, user])
 
+  const handleImageChange = (event) => {
+    const file = event.target.files?.[0]
+
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file (JPG, PNG, etc.).')
+      event.target.value = ''
+      return
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be 5MB or smaller.')
+      event.target.value = ''
+      return
+    }
+
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview)
+    }
+
+    const previewUrl = URL.createObjectURL(file)
+    setImageFile(file)
+    setImagePreview(previewUrl)
+  }
+
+  const handleRemoveImage = () => {
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview)
+    }
+    setImageFile(null)
+    setImagePreview(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
   const handleCreatePost = async (event) => {
     event.preventDefault()
 
@@ -154,21 +234,22 @@ export const Home = ({ user }) => {
         return
       }
 
-      const response = await axios.post(
-        '/api/posts',
-        {
-          title: newPost.title.trim(),
-          content: newPost.content.trim(),
+      const formData = new FormData()
+      formData.append('title', newPost.title.trim())
+      formData.append('content', newPost.content.trim())
+      if (imageFile) {
+        formData.append('image', imageFile)
+      }
+
+      const response = await axios.post('/api/posts', formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      )
+      })
 
       toast.success('Shared to your feed!')
       setNewPost({ title: '', content: '' })
+      handleRemoveImage()
 
       if (response.data?.post) {
         setPosts((prev) => [response.data.post, ...prev])
@@ -184,6 +265,185 @@ export const Home = ({ user }) => {
 
   const handleBoostProfile = () => {
     toast.success('Profile boosted! More people will see your next post.', { icon: '🚀' })
+  }
+
+  const handleMenuToggle = (event, postId) => {
+    event.stopPropagation()
+    setOpenMenuId((prev) => (prev === postId ? null : postId))
+  }
+
+  const handleToggleFavorite = (postId) => {
+    let toastMessage = ''
+    setFavoritePostIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(postId)) {
+        next.delete(postId)
+        toastMessage = 'Removed from favorites'
+      } else {
+        next.add(postId)
+        toastMessage = 'Added to favorites'
+      }
+      return next
+    })
+
+    if (toastMessage) {
+      toast.success(toastMessage)
+    }
+
+    setOpenMenuId(null)
+  }
+
+  const handleDeletePost = async (postId) => {
+    if (!postId) return
+
+    const confirmDelete = window.confirm('Delete this post? This action cannot be undone.')
+    if (!confirmDelete) return
+
+    const token = localStorage.getItem('token')
+    if (!token) {
+      toast.error('You need to be logged in to delete this post.')
+      return
+    }
+
+    try {
+      setDeletingPostId(postId)
+      await axios.delete(`/api/posts/${postId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      toast.success('Post deleted')
+      setPosts((prev) => prev.filter((post) => post._id !== postId))
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not delete the post. Try again!')
+    } finally {
+      setDeletingPostId(null)
+      setOpenMenuId(null)
+    }
+  }
+
+  const handleStartEdit = (post) => {
+    setEditingPostId(post._id)
+    setEditingFields({
+      title: post.title || '',
+      content: post.content || '',
+    })
+    setRemoveExistingImage(false)
+    setEditingImageFile(null)
+    setEditingImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+    if (editingFileInputRef.current) {
+      editingFileInputRef.current.value = ''
+    }
+    setOpenMenuId(null)
+  }
+
+  const handleCancelEdit = () => {
+    setEditingPostId(null)
+    setEditingFields({ title: '', content: '' })
+    setRemoveExistingImage(false)
+    setEditingImageFile(null)
+    setEditingImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+    if (editingFileInputRef.current) {
+      editingFileInputRef.current.value = ''
+    }
+  }
+
+  const handleEditingImageChange = (event) => {
+    const file = event.target.files?.[0]
+
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file (JPG, PNG, etc.).')
+      event.target.value = ''
+      return
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be 5MB or smaller.')
+      event.target.value = ''
+      return
+    }
+
+    setEditingImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+
+    setRemoveExistingImage(false)
+    const previewUrl = URL.createObjectURL(file)
+    setEditingImageFile(file)
+    setEditingImagePreview(previewUrl)
+  }
+
+  const handleRemoveEditingImage = () => {
+    setEditingImageFile(null)
+    setEditingImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+    if (editingFileInputRef.current) {
+      editingFileInputRef.current.value = ''
+    }
+  }
+
+  const handleUpdatePost = async (event) => {
+    event.preventDefault()
+    if (!editingPostId) return
+
+    const title = editingFields.title.trim()
+    const content = editingFields.content.trim()
+
+    if (!title || !content) {
+      toast.error('Title and content are required.')
+      return
+    }
+
+    const token = localStorage.getItem('token')
+
+    if (!token) {
+      toast.error('You need to be logged in to edit this post.')
+      return
+    }
+
+    try {
+      setIsUpdating(true)
+      const formData = new FormData()
+      formData.append('title', title)
+      formData.append('content', content)
+
+      if (editingImageFile) {
+        formData.append('image', editingImageFile)
+      } else if (removeExistingImage) {
+        formData.append('removeImage', 'true')
+      }
+
+      const response = await axios.put(`/api/posts/${editingPostId}`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      const updatedPost = response.data?.post
+      if (updatedPost) {
+        setPosts((prev) => prev.map((post) => (post._id === updatedPost._id ? updatedPost : post)))
+      } else {
+        fetchPosts()
+      }
+      toast.success('Post updated')
+      handleCancelEdit()
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not update the post. Try again!')
+    } finally {
+      setIsUpdating(false)
+    }
   }
 
   if (!user) {
@@ -260,6 +520,39 @@ export const Home = ({ user }) => {
                     placeholder="What's happening today? Share a thought, a win, or something inspiring."
                     className='w-full border border-gray-200 focus:border-gray-400 rounded-xl px-4 py-3 text-sm sm:text-base outline-none transition-colors resize-none'
                   />
+                  <div className='border border-dashed border-gray-300 rounded-xl px-4 py-4 bg-gray-50/60'>
+                    {imagePreview ? (
+                      <div className='relative'>
+                        <img src={imagePreview} alt='Selected preview' className='w-full h-56 object-cover rounded-lg' />
+                        <button
+                          type='button'
+                          onClick={handleRemoveImage}
+                          className='absolute top-3 right-3 inline-flex items-center gap-1 bg-black/60 text-white text-xs font-medium px-3 py-1.5 rounded-full hover:bg-black/80 transition'
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <label
+                        htmlFor='post-image-upload'
+                        className='flex flex-col items-center justify-center h-32 text-sm text-gray-500 gap-2 cursor-pointer hover:text-gray-700'
+                      >
+                        <span className='inline-flex items-center justify-center h-12 w-12 rounded-full bg-white text-gray-400 border border-gray-200'>
+                          📷
+                        </span>
+                        <span className='font-medium'>Add a cover image (optional)</span>
+                        <span className='text-xs text-gray-400'>JPG, PNG up to 5MB</span>
+                        <input
+                          id='post-image-upload'
+                          ref={fileInputRef}
+                          type='file'
+                          accept='image/*'
+                          onChange={handleImageChange}
+                          className='hidden'
+                        />
+                      </label>
+                    )}
+                  </div>
                   <div className='flex items-center justify-between'>
                     <div className='flex gap-2 text-sm text-gray-400'>
                       <span className='bg-gray-100 text-gray-500 px-3 py-1 rounded-full'>#moments</span>
@@ -327,10 +620,22 @@ export const Home = ({ user }) => {
                 const authorName = post.author_id?.username || 'Unknown creator'
                 const createdLabel = relativeTimeFromNow(post.createdAt)
                 const backgroundGradient = getGradientForIndex(index)
+                const isFavorited = favoritePostIds.has(post._id)
+                const currentUserId = user?._id || user?.id
+                const postAuthorId =
+                  (post && typeof post.author_id === 'string' && post.author_id) ||
+                  post.author_id?._id ||
+                  post.author_id?.id
+                const isOwner =
+                  currentUserId && postAuthorId
+                    ? String(currentUserId) === String(postAuthorId)
+                    : false
+                const isDeleting = deletingPostId === post._id
+                const isEditing = editingPostId === post._id
 
                 return (
                   <article key={post._id || index} className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden'>
-                    <header className='flex items-center gap-4 px-6 py-4'>
+                    <header className='flex items-center gap-4 px-6 py-4 relative'>
                       <div className={`h-12 w-12 rounded-full bg-linear-to-br ${backgroundGradient} text-white flex items-center justify-center font-semibold text-lg`}>
                         {getInitials(authorName)}
               </div>
@@ -338,26 +643,197 @@ export const Home = ({ user }) => {
                         <h3 className='font-semibold text-gray-900'>{authorName}</h3>
                         <p className='text-xs text-gray-500'>{createdLabel}</p>
             </div>
-                      <button type='button' className='text-gray-400 hover:text-gray-600'>
-                        <span className='text-lg'>•••</span>
-                      </button>
+                      {isEditing ? (
+                        <span className='text-xs font-semibold text-blue-500 uppercase'>Editing</span>
+                      ) : (
+                        <button
+                          type='button'
+                          data-post-menu-trigger
+                          onClick={(event) => handleMenuToggle(event, post._id)}
+                          className='text-gray-400 hover:text-gray-600'
+                        >
+                          <span className='text-lg'>•••</span>
+                        </button>
+                      )}
+
+                      {!isEditing && openMenuId === post._id && (
+                        <div
+                          data-post-menu-content
+                          className='absolute top-14 right-6 w-44 bg-white border border-gray-100 rounded-xl shadow-lg py-2 z-10'
+                        >
+                          <button
+                            type='button'
+                            onClick={() => handleToggleFavorite(post._id)}
+                            className='w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between'
+                          >
+                            <span>{isFavorited ? 'Remove favorite' : 'Add to favorites'}</span>
+                            <span className='text-base'>{isFavorited ? '★' : '☆'}</span>
+                          </button>
+                          {isOwner && (
+                            <>
+                              <button
+                                type='button'
+                                onClick={() => handleStartEdit(post)}
+                                className='w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between'
+                              >
+                                <span>Edit post</span>
+                                <span>✏️</span>
+                              </button>
+                              <button
+                                type='button'
+                                onClick={() => handleDeletePost(post._id)}
+                                className='w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 flex items-center justify-between disabled:opacity-60 disabled:cursor-not-allowed'
+                                disabled={isDeleting}
+                              >
+                                <span>{isDeleting ? 'Deleting…' : 'Delete post'}</span>
+                                <span>🗑️</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </header>
 
-                    <div className={`h-64 bg-linear-to-br ${backgroundGradient} relative flex items-end justify-start p-6`}> 
-                      <div className='absolute inset-0 bg-black/10 mix-blend-multiply' />
-                      <h2 className='relative text-white text-2xl font-bold drop-shadow-lg max-w-[70%]'>
-                        {post.title}
-                      </h2>
-          </div>
+                    {isEditing ? (
+                      <form onSubmit={handleUpdatePost} className='px-6 py-5 space-y-5 bg-gray-50/70 border-t border-gray-100'>
+                        <div className='space-y-3'>
+                          <label className='block text-xs font-semibold uppercase tracking-wide text-gray-500'>Title</label>
+                          <input
+                            type='text'
+                            value={editingFields.title}
+                            onChange={(event) =>
+                              setEditingFields((prev) => ({ ...prev, title: event.target.value }))
+                            }
+                            className='w-full border border-gray-300 rounded-lg px-4 py-2 text-sm outline-none focus:border-gray-500'
+                          />
+                        </div>
+                        <div className='space-y-3'>
+                          <label className='block text-xs font-semibold uppercase tracking-wide text-gray-500'>Content</label>
+                          <textarea
+                            rows={4}
+                            value={editingFields.content}
+                            onChange={(event) =>
+                              setEditingFields((prev) => ({ ...prev, content: event.target.value }))
+                            }
+                            className='w-full border border-gray-300 rounded-lg px-4 py-2 text-sm outline-none focus:border-gray-500 resize-none'
+                          />
+                        </div>
+                        <div className='border border-dashed border-gray-300 rounded-xl px-4 py-4 bg-white/60'>
+                          {editingImagePreview ? (
+                            <div className='relative'>
+                              <img
+                                src={editingImagePreview}
+                                alt='New image preview'
+                                className='w-full h-48 object-cover rounded-lg'
+                              />
+                              <button
+                                type='button'
+                                onClick={handleRemoveEditingImage}
+                                className='absolute top-3 right-3 inline-flex items-center gap-1 bg-black/60 text-white text-xs font-medium px-3 py-1.5 rounded-full hover:bg-black/80 transition'
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ) : !removeExistingImage && post.imageUrl ? (
+                            <div className='relative'>
+                              <img
+                                src={post.imageUrl}
+                                alt={post.title || 'Current post image'}
+                                className='w-full h-48 object-cover rounded-lg'
+                              />
+                              <div className='absolute top-3 right-3 flex gap-2'>
+                                <button
+                                  type='button'
+                                  onClick={() => {
+                                    if (editingFileInputRef.current) {
+                                      editingFileInputRef.current.click()
+                                    }
+                                  }}
+                                  className='px-3 py-1.5 text-xs font-medium bg-white text-gray-700 rounded-full shadow-sm hover:bg-gray-100'
+                                >
+                                  Change
+                                </button>
+                                <button
+                                  type='button'
+                                  onClick={() => setRemoveExistingImage(true)}
+                                  className='px-3 py-1.5 text-xs font-medium bg-red-500 text-white rounded-full shadow-sm hover:bg-red-600'
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <label
+                              htmlFor={`edit-image-${post._id}`}
+                              className='flex flex-col items-center justify-center h-28 text-sm text-gray-500 gap-2 cursor-pointer hover:text-gray-700'
+                            >
+                              <span className='inline-flex items-center justify-center h-10 w-10 rounded-full bg-white text-gray-400 border border-gray-200'>
+                                📷
+                              </span>
+                              <span className='font-medium'>Add an image (optional)</span>
+                              <span className='text-xs text-gray-400'>JPG, PNG up to 5MB</span>
+                              <input
+                                id={`edit-image-${post._id}`}
+                                ref={editingFileInputRef}
+                                type='file'
+                                accept='image/*'
+                                onChange={handleEditingImageChange}
+                                className='hidden'
+                              />
+                            </label>
+                          )}
+                        </div>
+                        <div className='flex justify-end gap-3'>
+                          <button
+                            type='button'
+                            onClick={handleCancelEdit}
+                            className='px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-full hover:bg-gray-50'
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type='submit'
+                            disabled={isUpdating}
+                            className='px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-full shadow-sm hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed'
+                          >
+                            {isUpdating ? 'Saving…' : 'Save changes'}
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <>
+                        {post.imageUrl ? (
+                          <div className='relative bg-black'>
+                            <img
+                              src={post.imageUrl}
+                              alt={post.title || 'Post image'}
+                              className='w-full h-64 object-cover'
+                              loading='lazy'
+                            />
+                            <div className='absolute inset-0 bg-black/20' />
+                            <h2 className='absolute bottom-4 left-6 right-6 text-white text-2xl font-bold drop-shadow-lg'>
+                              {post.title}
+                            </h2>
+                          </div>
+                        ) : (
+                          <div className={`h-64 bg-linear-to-br ${backgroundGradient} relative flex items-end justify-start p-6`}>
+                            <div className='absolute inset-0 bg-black/10 mix-blend-multiply' />
+                            <h2 className='relative text-white text-2xl font-bold drop-shadow-lg max-w-[70%]'>
+                              {post.title}
+                            </h2>
+                          </div>
+                        )}
 
-                    <section className='px-6 py-5 space-y-4'>
-                      <p className='text-gray-700 leading-relaxed whitespace-pre-line'>{post.content}</p>
-                      <div className='flex items-center justify-between text-xs text-gray-400'>
-                        <span>❤️ {Math.floor(Math.random() * 90) + 10}</span>
-                        <span>💬 {Math.floor(Math.random() * 20)}</span>
-                        <span>🔁 {Math.floor(Math.random() * 10)}</span>
+                        <section className='px-6 py-5 space-y-4'>
+                          <p className='text-gray-700 leading-relaxed whitespace-pre-line'>{post.content}</p>
+                          <div className='flex items-center justify-between text-xs text-gray-400'>
+                            <span>❤️ {Math.floor(Math.random() * 90) + 10}</span>
+                            <span>💬 {Math.floor(Math.random() * 20)}</span>
+                            <span>🔁 {Math.floor(Math.random() * 10)}</span>
               </div>
-                    </section>
+                        </section>
+                      </>
+                    )}
                   </article>
                 )
               })}

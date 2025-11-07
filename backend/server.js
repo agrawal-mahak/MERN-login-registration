@@ -1,9 +1,8 @@
+import "./config/loadEnv.js";
 import express from "express";
-import dotenv from "dotenv";
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/auth.js";
 import postRoutes from "./routes/post.js";
-dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 

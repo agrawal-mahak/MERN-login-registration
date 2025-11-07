@@ -1,4 +1,5 @@
 import Post from "../models/Post.js";
+import { uploadImage, deleteImage } from "../config/cloudinary.js";
 
 export const createPost = async (req, res) => {
   try {
@@ -7,21 +8,25 @@ export const createPost = async (req, res) => {
       return res.status(401).json({ message: "User not authenticated" });
     }
 
-    // Check if request body exists
-    if (!req.body) {
-      return res.status(400).json({ message: "Request body is required" });
-    }
+    const { title, content } = req.body || {};
+    const normalizedTitle = typeof title === "string" ? title.trim() : "";
+    const normalizedContent = typeof content === "string" ? content.trim() : "";
 
-    const { title, content } = req.body;
-
-    if (!title || !content) {
+    if (!normalizedTitle || !normalizedContent) {
       return res.status(400).json({ message: "Title and content are required" });
     }
 
+    let uploadedImage;
+    if (req.file) {
+      uploadedImage = await uploadImage(req.file);
+    }
+
     const post = await Post.create({
-      title,
-      content,
+      title: normalizedTitle,
+      content: normalizedContent,
       author_id: req.user._id,
+      imageUrl: uploadedImage?.secure_url,
+      imagePublicId: uploadedImage?.public_id,
     });
 
     // Fetch the post with populated author information
@@ -110,6 +115,22 @@ export const updatePost = async (req, res) => {
     if (content) post.content = content;
     post.updatedAt = Date.now();
 
+    const shouldRemoveImage =
+      req.body?.removeImage === true || req.body?.removeImage === "true";
+
+    if (req.file) {
+      if (post.imagePublicId) {
+        await deleteImage(post.imagePublicId);
+      }
+      const uploadedImage = await uploadImage(req.file);
+      post.imageUrl = uploadedImage.secure_url;
+      post.imagePublicId = uploadedImage.public_id;
+    } else if (shouldRemoveImage && post.imagePublicId) {
+      await deleteImage(post.imagePublicId);
+      post.imageUrl = undefined;
+      post.imagePublicId = undefined;
+    }
+
     const updatedPost = await post.save();
     await updatedPost.populate("author_id", "username email");
 
@@ -145,6 +166,10 @@ export const deletePost = async (req, res) => {
     }
 
     await Post.findByIdAndDelete(req.params.id);
+
+    if (post.imagePublicId) {
+      await deleteImage(post.imagePublicId);
+    }
 
     res.status(200).json({
       message: "Post deleted successfully",
