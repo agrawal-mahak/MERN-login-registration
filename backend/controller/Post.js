@@ -1,0 +1,179 @@
+import Post from "../models/Post.js";
+
+export const createPost = async (req, res) => {
+  try {
+    // Check if user is authenticated
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ message: "User not authenticated" });
+    }
+
+    // Check if request body exists
+    if (!req.body) {
+      return res.status(400).json({ message: "Request body is required" });
+    }
+
+    const { title, content } = req.body;
+
+    if (!title || !content) {
+      return res.status(400).json({ message: "Title and content are required" });
+    }
+
+    const post = await Post.create({
+      title,
+      content,
+      author_id: req.user._id,
+    });
+
+    // Fetch the post with populated author information
+    const populatedPost = await Post.findById(post._id).populate(
+      "author_id",
+      "username email"
+    );
+
+    res.status(201).json({  
+      message: "Post created successfully",
+      post: populatedPost,
+    });
+  } catch (error) {
+    console.error("Error creating post:", error);
+    res.status(500).json({ 
+      message: "Internal server error",
+      error: error.message
+    });
+  }
+};
+
+// @desc    Get all posts
+// @route   GET /api/posts
+// @access  Public
+export const getPosts = async (req, res) => {
+  try {
+    const posts = await Post.find()
+      .populate("author_id", "username email")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      count: posts.length,
+      posts,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// @desc    Get a single post by ID
+// @route   GET /api/posts/:id
+// @access  Public
+export const getPost = async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id).populate(
+      "author_id",
+      "username email"
+    );
+
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    res.status(200).json(post);
+  } catch (error) {
+    console.error(error);
+    if (error.name === "CastError") {
+      return res.status(400).json({ message: "Invalid post ID" });
+    }
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// @desc    Update a post
+// @route   PUT /api/posts/:id
+// @access  Private (only author can update)
+export const updatePost = async (req, res) => {
+  try {
+    const { title, content } = req.body;
+    const post = await Post.findById(req.params.id);
+
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    // Check if the user is the author
+    if (post.author_id.toString() !== req.user._id.toString()) {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to update this post" });
+    }
+
+    // Update fields
+    if (title) post.title = title;
+    if (content) post.content = content;
+    post.updatedAt = Date.now();
+
+    const updatedPost = await post.save();
+    await updatedPost.populate("author_id", "username email");
+
+    res.status(200).json({
+      message: "Post updated successfully",
+      post: updatedPost,
+    });
+  } catch (error) {
+    console.error(error);
+    if (error.name === "CastError") {
+      return res.status(400).json({ message: "Invalid post ID" });
+    }
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// @desc    Delete a post
+// @route   DELETE /api/posts/:id
+// @access  Private (only author can delete)
+export const deletePost = async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    // Check if the user is the author
+    if (post.author_id.toString() !== req.user._id.toString()) {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to delete this post" });
+    }
+
+    await Post.findByIdAndDelete(req.params.id);
+
+    res.status(200).json({
+      message: "Post deleted successfully",
+    });
+  } catch (error) {
+    console.error(error);
+    if (error.name === "CastError") {
+      return res.status(400).json({ message: "Invalid post ID" });
+    }
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// @desc    Get posts by current user
+// @route   GET /api/posts/my/posts
+// @access  Private
+export const getMyPosts = async (req, res) => {
+  try {
+    const posts = await Post.find({ author_id: req.user._id })
+      .populate("author_id", "username email")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      count: posts.length,
+      posts,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
