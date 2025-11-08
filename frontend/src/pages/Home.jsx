@@ -1,511 +1,455 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import axios from 'axios'
-import toast from 'react-hot-toast'
-import { Landing } from '../components/Landing'
-import { ProfileEditModal } from '../components/ProfileEditModal'
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import axios from "axios";
+import toast from "react-hot-toast";
+import { Landing } from "../components/Landing";
+import { ProfileEditModal } from "../components/ProfileEditModal";
+import { CreatePostComposer } from "../components/CreatePostComposer";
 
 const relativeTimeFromNow = (dateInput) => {
-  if (!dateInput) return 'just now'
+  if (!dateInput) return "just now";
 
-  const date = new Date(dateInput)
-  const now = Date.now()
-  const diff = Math.floor((now - date.getTime()) / 1000)
+  const date = new Date(dateInput);
+  const now = Date.now();
+  const diff = Math.floor((now - date.getTime()) / 1000);
 
-  if (Number.isNaN(diff) || diff < 0) return 'just now'
-  if (diff < 60) return `${Math.max(diff, 1)}s ago`
+  if (Number.isNaN(diff) || diff < 0) return "just now";
+  if (diff < 60) return `${Math.max(diff, 1)}s ago`;
 
   const intervals = [
-    { label: 'm', seconds: 60 },
-    { label: 'h', seconds: 60 * 60 },
-    { label: 'd', seconds: 60 * 60 * 24 },
-    { label: 'w', seconds: 60 * 60 * 24 * 7 },
-  ]
+    { label: "m", seconds: 60 },
+    { label: "h", seconds: 60 * 60 },
+    { label: "d", seconds: 60 * 60 * 24 },
+    { label: "w", seconds: 60 * 60 * 24 * 7 },
+  ];
 
   for (let i = intervals.length - 1; i >= 0; i -= 1) {
-    const interval = Math.floor(diff / intervals[i].seconds)
+    const interval = Math.floor(diff / intervals[i].seconds);
     if (interval >= 1) {
-      return `${interval}${intervals[i].label} ago`
+      return `${interval}${intervals[i].label} ago`;
     }
   }
 
-  const months = Math.floor(diff / (60 * 60 * 24 * 30))
-  if (months >= 1) return `${months}mo ago`
+  const months = Math.floor(diff / (60 * 60 * 24 * 30));
+  if (months >= 1) return `${months}mo ago`;
 
-  const years = Math.floor(diff / (60 * 60 * 24 * 365))
-  if (years >= 1) return `${years}y ago`
+  const years = Math.floor(diff / (60 * 60 * 24 * 365));
+  if (years >= 1) return `${years}y ago`;
 
-  return 'just now'
-}
+  return "just now";
+};
 
 const getGradientForIndex = (index) => {
   const gradients = [
-    'from-pink-500 via-red-500 to-yellow-500',
-    'from-indigo-500 via-purple-500 to-pink-500',
-    'from-blue-500 via-cyan-500 to-teal-500',
-    'from-amber-500 via-orange-500 to-rose-500',
-    'from-lime-500 via-emerald-500 to-teal-500',
-    'from-sky-500 via-blue-500 to-indigo-500',
-  ]
+    "from-pink-500 via-red-500 to-yellow-500",
+    "from-indigo-500 via-purple-500 to-pink-500",
+    "from-blue-500 via-cyan-500 to-teal-500",
+    "from-amber-500 via-orange-500 to-rose-500",
+    "from-lime-500 via-emerald-500 to-teal-500",
+    "from-sky-500 via-blue-500 to-indigo-500",
+  ];
 
-  return gradients[index % gradients.length]
-}
+  return gradients[index % gradients.length];
+};
 
-const getInitials = (name = '') => {
+const getInitials = (name = "") => {
   return name
-    .split(' ')
+    .split(" ")
     .map((chunk) => chunk.charAt(0))
-    .join('')
+    .join("")
     .toUpperCase()
-    .slice(0, 2)
-}
+    .slice(0, 2);
+};
 
 export const Home = ({ user, onUserUpdated, onProfileHandlersReady }) => {
-  const [posts, setPosts] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [fetchError, setFetchError] = useState(null)
-  const [newPost, setNewPost] = useState({ title: '', content: '' })
-  const [imageFile, setImageFile] = useState(null)
-  const [imagePreview, setImagePreview] = useState(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [deletingPostId, setDeletingPostId] = useState(null)
-  const [openMenuId, setOpenMenuId] = useState(null)
-  const [favoritePostIds, setFavoritePostIds] = useState(() => new Set())
-  const [openCommentsId, setOpenCommentsId] = useState(null)
-  const [commentDrafts, setCommentDrafts] = useState({})
-  const [pendingLikes, setPendingLikes] = useState({})
-  const [pendingComments, setPendingComments] = useState({})
-  const [editingPostId, setEditingPostId] = useState(null)
-  const [editingFields, setEditingFields] = useState({ title: '', content: '' })
-  const [editingImageFile, setEditingImageFile] = useState(null)
-  const [editingImagePreview, setEditingImagePreview] = useState(null)
-  const [removeExistingImage, setRemoveExistingImage] = useState(false)
-  const [isUpdating, setIsUpdating] = useState(false)
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
-  const [isProfileSaving, setIsProfileSaving] = useState(false)
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
+  const [deletingPostId, setDeletingPostId] = useState(null);
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [favoritePostIds, setFavoritePostIds] = useState(() => new Set());
+  const [openCommentsId, setOpenCommentsId] = useState(null);
+  const [commentDrafts, setCommentDrafts] = useState({});
+  const [pendingLikes, setPendingLikes] = useState({});
+  const [pendingComments, setPendingComments] = useState({});
+  const [editingPostId, setEditingPostId] = useState(null);
+  const [editingFields, setEditingFields] = useState({
+    title: "",
+    content: "",
+  });
+  const [editingImageFile, setEditingImageFile] = useState(null);
+  const [editingImagePreview, setEditingImagePreview] = useState(null);
+  const [removeExistingImage, setRemoveExistingImage] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [profileForm, setProfileForm] = useState({
-    username: user?.username || '',
-    email: user?.email || '',
-    password: '',
-  })
-  const [profileImageFile, setProfileImageFile] = useState(null)
-  const [profileImagePreview, setProfileImagePreview] = useState(null)
-  const [removeProfileImage, setRemoveProfileImage] = useState(false)
-  const [profileImageInputKey, setProfileImageInputKey] = useState(0)
-  const fileInputRef = useRef(null)
-  const editingFileInputRef = useRef(null)
-
-  useEffect(() => {
-    return () => {
-      if (imagePreview) {
-        URL.revokeObjectURL(imagePreview)
-      }
-    }
-  }, [imagePreview])
+    username: user?.username || "",
+    email: user?.email || "",
+    password: "",
+  });
+  const [profileImageFile, setProfileImageFile] = useState(null);
+  const [profileImagePreview, setProfileImagePreview] = useState(null);
+  const [removeProfileImage, setRemoveProfileImage] = useState(false);
+  const [profileImageInputKey, setProfileImageInputKey] = useState(0);
+  const editingFileInputRef = useRef(null);
 
   useEffect(() => {
     return () => {
       if (editingImagePreview) {
-        URL.revokeObjectURL(editingImagePreview)
+        URL.revokeObjectURL(editingImagePreview);
       }
-    }
-  }, [editingImagePreview])
+    };
+  }, [editingImagePreview]);
 
   useEffect(() => {
     return () => {
       if (profileImagePreview) {
-        URL.revokeObjectURL(profileImagePreview)
+        URL.revokeObjectURL(profileImagePreview);
       }
-    }
-  }, [profileImagePreview])
+    };
+  }, [profileImagePreview]);
 
   useEffect(() => {
     setProfileForm({
-      username: user?.username || '',
-      email: user?.email || '',
-      password: '',
-    })
-    setProfileImageFile(null)
+      username: user?.username || "",
+      email: user?.email || "",
+      password: "",
+    });
+    setProfileImageFile(null);
     setProfileImagePreview((prev) => {
       if (prev) {
-        URL.revokeObjectURL(prev)
+        URL.revokeObjectURL(prev);
       }
-      return null
-    })
-    setRemoveProfileImage(false)
-    setProfileImageInputKey((prev) => prev + 1)
-    setOpenCommentsId(null)
-    setCommentDrafts({})
-    setPendingLikes({})
-    setPendingComments({})
-  }, [user])
+      return null;
+    });
+    setRemoveProfileImage(false);
+    setProfileImageInputKey((prev) => prev + 1);
+    setOpenCommentsId(null);
+    setCommentDrafts({});
+    setPendingLikes({});
+    setPendingComments({});
+  }, [user]);
 
   useEffect(() => {
     const handleGlobalClick = (event) => {
       if (
-        !event.target.closest('[data-post-menu-trigger]') &&
-        !event.target.closest('[data-post-menu-content]')
+        !event.target.closest("[data-post-menu-trigger]") &&
+        !event.target.closest("[data-post-menu-content]")
       ) {
-        setOpenMenuId(null)
+        setOpenMenuId(null);
       }
-    }
+    };
 
-    document.addEventListener('click', handleGlobalClick)
-    return () => document.removeEventListener('click', handleGlobalClick)
-  }, [])
+    document.addEventListener("click", handleGlobalClick);
+    return () => document.removeEventListener("click", handleGlobalClick);
+  }, []);
 
   const fetchPosts = useCallback(async () => {
-    if (!user) return
+    if (!user) return;
 
     try {
-      setLoading(true)
-      setFetchError(null)
-      const token = localStorage.getItem('token')
+      setLoading(true);
+      setFetchError(null);
+      const token = localStorage.getItem("token");
 
-      const response = await axios.get('/api/posts', {
+      const response = await axios.get("/api/posts", {
         headers: token
           ? {
               Authorization: `Bearer ${token}`,
             }
           : undefined,
-      })
+      });
 
-      setPosts(response.data?.posts ?? [])
+      setPosts(response.data?.posts ?? []);
     } catch (error) {
-      setFetchError(error.response?.data?.message || 'Unable to load feed right now.')
+      setFetchError(
+        error.response?.data?.message || "Unable to load feed right now."
+      );
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [user])
+  }, [user]);
 
   useEffect(() => {
-    fetchPosts()
-  }, [fetchPosts])
+    fetchPosts();
+  }, [fetchPosts]);
+
+  const handlePostCreated = useCallback(
+    (createdPost) => {
+      if (createdPost) {
+        setPosts((prev) => [createdPost, ...prev]);
+      } else {
+        fetchPosts();
+      }
+    },
+    [fetchPosts]
+  );
 
   const storyItems = useMemo(() => {
     if (!posts.length) {
       return Array.from({ length: 8 }).map((_, index) => ({
         id: `placeholder-${index}`,
         name: index === 0 && user ? user.username : `Story ${index + 1}`,
-        initials: index === 0 && user ? getInitials(user.username) : `S${index + 1}`,
+        initials:
+          index === 0 && user ? getInitials(user.username) : `S${index + 1}`,
         isUser: index === 0,
         gradient: getGradientForIndex(index),
         imageUrl: index === 0 && user ? user.profileImageUrl : undefined,
-      }))
+      }));
     }
 
     return posts.slice(0, 10).map((post, index) => ({
       id: post._id || index,
-      name: post.author_id?.username || 'Creator',
-      initials: getInitials(post.author_id?.username || 'C'),
+      name: post.author_id?.username || "Creator",
+      initials: getInitials(post.author_id?.username || "C"),
       isUser: post.author_id?._id === user?._id,
       gradient: getGradientForIndex(index),
       imageUrl: post.author_id?.profileImageUrl,
-    }))
-  }, [posts, user])
+    }));
+  }, [posts, user]);
 
   const suggestedCreators = useMemo(() => {
     const fallback = [
-      { id: '1', name: 'Design Daily', description: 'Creative sparks every day' },
-      { id: '2', name: 'Code Stories', description: 'Full-stack snippets & tips' },
-      { id: '3', name: 'Mindful Moves', description: 'Wellness & active living' },
-    ]
+      {
+        id: "1",
+        name: "Design Daily",
+        description: "Creative sparks every day",
+      },
+      {
+        id: "2",
+        name: "Code Stories",
+        description: "Full-stack snippets & tips",
+      },
+      {
+        id: "3",
+        name: "Mindful Moves",
+        description: "Wellness & active living",
+      },
+    ];
 
-    if (!posts.length) return fallback
+    if (!posts.length) return fallback;
 
     const uniqueAuthors = posts.reduce((acc, post) => {
-      const authorId = post.author_id?._id
-      if (!authorId || authorId === user?._id) return acc
-      if (acc.some((item) => item.id === authorId)) return acc
+      const authorId = post.author_id?._id;
+      if (!authorId || authorId === user?._id) return acc;
+      if (acc.some((item) => item.id === authorId)) return acc;
 
       acc.push({
         id: authorId,
-        name: post.author_id?.username || 'Creator',
-        description: post.title || 'New on your feed',
+        name: post.author_id?.username || "Creator",
+        description: post.title || "New on your feed",
         imageUrl: post.author_id?.profileImageUrl,
-      })
-      return acc
-    }, [])
+      });
+      return acc;
+    }, []);
 
-    return uniqueAuthors.slice(0, 5).concat(fallback).slice(0, 5)
-  }, [posts, user])
-
-  const handleImageChange = (event) => {
-    const file = event.target.files?.[0]
-
-    if (!file) return
-
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please choose an image file (JPG, PNG, etc.).')
-      event.target.value = ''
-      return
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be 5MB or smaller.')
-      event.target.value = ''
-      return
-    }
-
-    if (imagePreview) {
-      URL.revokeObjectURL(imagePreview)
-    }
-
-    const previewUrl = URL.createObjectURL(file)
-    setImageFile(file)
-    setImagePreview(previewUrl)
-  }
-
-  const handleRemoveImage = () => {
-    if (imagePreview) {
-      URL.revokeObjectURL(imagePreview)
-    }
-    setImageFile(null)
-    setImagePreview(null)
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
-  }
-
-  const handleCreatePost = async (event) => {
-    event.preventDefault()
-
-    if (!newPost.title.trim() || !newPost.content.trim()) {
-      toast.error('Add a title and something to share before posting!')
-      return
-    }
-
-    try {
-      setIsSubmitting(true)
-      const token = localStorage.getItem('token')
-
-      if (!token) {
-        toast.error('You need to be logged in to post.')
-        return
-      }
-
-      const formData = new FormData()
-      formData.append('title', newPost.title.trim())
-      formData.append('content', newPost.content.trim())
-      if (imageFile) {
-        formData.append('image', imageFile)
-      }
-
-      const response = await axios.post('/api/posts', formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      toast.success('Shared to your feed!')
-      setNewPost({ title: '', content: '' })
-      handleRemoveImage()
-
-      if (response.data?.post) {
-        setPosts((prev) => [response.data.post, ...prev])
-      } else {
-        fetchPosts()
-      }
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Could not share your post. Try again!')
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
+    return uniqueAuthors.slice(0, 5).concat(fallback).slice(0, 5);
+  }, [posts, user]);
 
   const handleBoostProfile = () => {
-    toast.success('Profile boosted! More people will see your next post.', { icon: '🚀' })
-  }
+    toast.success("Profile boosted! More people will see your next post.", {
+      icon: "🚀",
+    });
+  };
 
   const clearProfileImageSelection = useCallback((keepRemovalFlag = false) => {
-    setProfileImageFile(null)
+    setProfileImageFile(null);
     setProfileImagePreview((prev) => {
       if (prev) {
-        URL.revokeObjectURL(prev)
+        URL.revokeObjectURL(prev);
       }
-      return null
-    })
-    setProfileImageInputKey((prev) => prev + 1)
+      return null;
+    });
+    setProfileImageInputKey((prev) => prev + 1);
     if (!keepRemovalFlag) {
-      setRemoveProfileImage(false)
+      setRemoveProfileImage(false);
     }
-  }, [])
+  }, []);
 
   const handleProfileImageSelect = (event) => {
-    const file = event.target.files?.[0]
+    const file = event.target.files?.[0];
 
-    if (!file) return
+    if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please choose an image file (JPG, PNG, etc.).')
-      clearProfileImageSelection()
-      return
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please choose an image file (JPG, PNG, etc.).");
+      clearProfileImageSelection();
+      return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be 5MB or smaller.')
-      clearProfileImageSelection()
-      return
+      toast.error("Image must be 5MB or smaller.");
+      clearProfileImageSelection();
+      return;
     }
 
     setProfileImagePreview((prev) => {
       if (prev) {
-        URL.revokeObjectURL(prev)
+        URL.revokeObjectURL(prev);
       }
-      return URL.createObjectURL(file)
-    })
-    setProfileImageFile(file)
-    setRemoveProfileImage(false)
-  }
+      return URL.createObjectURL(file);
+    });
+    setProfileImageFile(file);
+    setRemoveProfileImage(false);
+  };
 
   const handleClearNewProfileImage = () => {
-    clearProfileImageSelection()
-  }
+    clearProfileImageSelection();
+  };
 
   const handleRemoveExistingProfileImage = () => {
-    clearProfileImageSelection(true)
-    setRemoveProfileImage(true)
-  }
+    clearProfileImageSelection(true);
+    setRemoveProfileImage(true);
+  };
 
   const handleUndoRemoveProfileImage = () => {
-    setRemoveProfileImage(false)
-  }
+    setRemoveProfileImage(false);
+  };
 
   const handleOpenProfileModal = useCallback(() => {
     setProfileForm({
-      username: user?.username || '',
-      email: user?.email || '',
-      password: '',
-    })
-    clearProfileImageSelection()
-    setIsProfileModalOpen(true)
-  }, [user, clearProfileImageSelection])
+      username: user?.username || "",
+      email: user?.email || "",
+      password: "",
+    });
+    clearProfileImageSelection();
+    setIsProfileModalOpen(true);
+  }, [user, clearProfileImageSelection]);
 
   const handleCloseProfileModal = useCallback(() => {
-    setIsProfileModalOpen(false)
+    setIsProfileModalOpen(false);
     setProfileForm((prev) => ({
       username: user?.username || prev.username,
       email: user?.email || prev.email,
-      password: '',
-    }))
-    clearProfileImageSelection()
-  }, [user, clearProfileImageSelection])
+      password: "",
+    }));
+    clearProfileImageSelection();
+  }, [user, clearProfileImageSelection]);
 
   const handleProfileFieldChange = (event) => {
-    const { name, value } = event.target
-    setProfileForm((prev) => ({ ...prev, [name]: value }))
-  }
+    const { name, value } = event.target;
+    setProfileForm((prev) => ({ ...prev, [name]: value }));
+  };
 
   const handleSubmitProfileUpdate = async (event) => {
-    event.preventDefault()
+    event.preventDefault();
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem("token");
 
     if (!token) {
-      toast.error('You need to be logged in to update your profile.')
-      return
+      toast.error("You need to be logged in to update your profile.");
+      return;
     }
 
-    const username = profileForm.username.trim()
-    const email = profileForm.email.trim()
+    const username = profileForm.username.trim();
+    const email = profileForm.email.trim();
 
     if (!username || !email) {
-      toast.error('Username and email are required.')
-      return
+      toast.error("Username and email are required.");
+      return;
     }
 
-    const formData = new FormData()
-    formData.append('username', username)
-    formData.append('email', email)
+    const formData = new FormData();
+    formData.append("username", username);
+    formData.append("email", email);
 
     if (profileForm.password.trim()) {
-      formData.append('password', profileForm.password.trim())
+      formData.append("password", profileForm.password.trim());
     }
 
     if (profileImageFile) {
-      formData.append('profileImage', profileImageFile)
+      formData.append("profileImage", profileImageFile);
     } else if (removeProfileImage) {
-      formData.append('removeProfileImage', 'true')
+      formData.append("removeProfileImage", "true");
     }
 
     try {
-      setIsProfileSaving(true)
-      const response = await axios.put('/api/users/me', formData, {
+      setIsProfileSaving(true);
+      const response = await axios.put("/api/users/me", formData, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-      })
+      });
 
-      const updatedUser = response.data?.user || response.data
+      const updatedUser = response.data?.user || response.data;
       if (updatedUser) {
-        onUserUpdated?.(updatedUser)
+        onUserUpdated?.(updatedUser);
       }
 
-      toast.success(response.data?.message || 'Profile updated')
-      handleCloseProfileModal()
+      toast.success(response.data?.message || "Profile updated");
+      handleCloseProfileModal();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Could not update profile right now.')
+      toast.error(
+        error.response?.data?.message || "Could not update profile right now."
+      );
     } finally {
-      setIsProfileSaving(false)
+      setIsProfileSaving(false);
     }
-  }
+  };
 
   useEffect(() => {
-    onProfileHandlersReady?.({ open: handleOpenProfileModal })
+    onProfileHandlersReady?.({ open: handleOpenProfileModal });
     return () => {
-      onProfileHandlersReady?.({ open: null })
-    }
-  }, [onProfileHandlersReady, handleOpenProfileModal])
+      onProfileHandlersReady?.({ open: null });
+    };
+  }, [onProfileHandlersReady, handleOpenProfileModal]);
 
   const handleMenuToggle = (event, postId) => {
-    event.stopPropagation()
-    setOpenMenuId((prev) => (prev === postId ? null : postId))
-  }
+    event.stopPropagation();
+    setOpenMenuId((prev) => (prev === postId ? null : postId));
+  };
 
   const handleToggleFavorite = (postId) => {
-    let toastMessage = ''
+    let toastMessage = "";
     setFavoritePostIds((prev) => {
-      const next = new Set(prev)
+      const next = new Set(prev);
       if (next.has(postId)) {
-        next.delete(postId)
-        toastMessage = 'Removed from favorites'
+        next.delete(postId);
+        toastMessage = "Removed from favorites";
       } else {
-        next.add(postId)
-        toastMessage = 'Added to favorites'
+        next.add(postId);
+        toastMessage = "Added to favorites";
       }
-      return next
-    })
+      return next;
+    });
 
     if (toastMessage) {
-      toast.success(toastMessage)
+      toast.success(toastMessage);
     }
 
-    setOpenMenuId(null)
-  }
+    setOpenMenuId(null);
+  };
 
   const handleToggleComments = (postId) => {
-    setOpenCommentsId((prev) => (prev === postId ? null : postId))
-  }
+    setOpenCommentsId((prev) => (prev === postId ? null : postId));
+  };
 
   const handleCommentDraftChange = (postId, value) => {
-    setCommentDrafts((prev) => ({ ...prev, [postId]: value }))
-  }
+    setCommentDrafts((prev) => ({ ...prev, [postId]: value }));
+  };
 
   const handleToggleLike = async (postId) => {
     if (!user) {
-      toast.error('You need to be logged in to like posts.')
-      return
+      toast.error("You need to be logged in to like posts.");
+      return;
     }
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem("token");
 
     if (!token) {
-      toast.error('You need to be logged in to like posts.')
-      return
+      toast.error("You need to be logged in to like posts.");
+      return;
     }
 
-    if (pendingLikes[postId]) return
+    if (pendingLikes[postId]) return;
 
-    setPendingLikes((prev) => ({ ...prev, [postId]: true }))
+    setPendingLikes((prev) => ({ ...prev, [postId]: true }));
 
     try {
       const response = await axios.post(
@@ -516,49 +460,53 @@ export const Home = ({ user, onUserUpdated, onProfileHandlersReady }) => {
             Authorization: `Bearer ${token}`,
           },
         }
-      )
+      );
 
-      const updatedPost = response.data?.post
+      const updatedPost = response.data?.post;
       if (updatedPost) {
         setPosts((prev) =>
-          prev.map((post) => (post._id === updatedPost._id ? updatedPost : post))
-        )
+          prev.map((post) =>
+            post._id === updatedPost._id ? updatedPost : post
+          )
+        );
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Could not update like right now.')
+      toast.error(
+        error.response?.data?.message || "Could not update like right now."
+      );
     } finally {
       setPendingLikes((prev) => {
-        const next = { ...prev }
-        delete next[postId]
-        return next
-      })
+        const next = { ...prev };
+        delete next[postId];
+        return next;
+      });
     }
-  }
+  };
 
   const handleSubmitComment = async (event, postId) => {
-    event.preventDefault()
+    event.preventDefault();
 
     if (!user) {
-      toast.error('You need to be logged in to comment.')
-      return
+      toast.error("You need to be logged in to comment.");
+      return;
     }
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem("token");
 
     if (!token) {
-      toast.error('You need to be logged in to comment.')
-      return
+      toast.error("You need to be logged in to comment.");
+      return;
     }
 
-    const rawDraft = commentDrafts[postId] || ''
-    const text = rawDraft.trim()
+    const rawDraft = commentDrafts[postId] || "";
+    const text = rawDraft.trim();
 
     if (!text) {
-      toast.error('Add a message before posting your comment.')
-      return
+      toast.error("Add a message before posting your comment.");
+      return;
     }
 
-    setPendingComments((prev) => ({ ...prev, [postId]: true }))
+    setPendingComments((prev) => ({ ...prev, [postId]: true }));
 
     try {
       const response = await axios.post(
@@ -569,475 +517,447 @@ export const Home = ({ user, onUserUpdated, onProfileHandlersReady }) => {
             Authorization: `Bearer ${token}`,
           },
         }
-      )
+      );
 
-      const updatedPost = response.data?.post
+      const updatedPost = response.data?.post;
       if (updatedPost) {
         setPosts((prev) =>
-          prev.map((post) => (post._id === updatedPost._id ? updatedPost : post))
-        )
-        setCommentDrafts((prev) => ({ ...prev, [postId]: '' }))
+          prev.map((post) =>
+            post._id === updatedPost._id ? updatedPost : post
+          )
+        );
+        setCommentDrafts((prev) => ({ ...prev, [postId]: "" }));
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Could not add comment right now.')
+      toast.error(
+        error.response?.data?.message || "Could not add comment right now."
+      );
     } finally {
       setPendingComments((prev) => {
-        const next = { ...prev }
-        delete next[postId]
-        return next
-      })
+        const next = { ...prev };
+        delete next[postId];
+        return next;
+      });
     }
-  }
+  };
 
   const handleDeletePost = async (postId) => {
-    if (!postId) return
+    if (!postId) return;
 
-    const confirmDelete = window.confirm('Delete this post? This action cannot be undone.')
-    if (!confirmDelete) return
+    const confirmDelete = window.confirm(
+      "Delete this post? This action cannot be undone."
+    );
+    if (!confirmDelete) return;
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem("token");
     if (!token) {
-      toast.error('You need to be logged in to delete this post.')
-      return
+      toast.error("You need to be logged in to delete this post.");
+      return;
     }
 
     try {
-      setDeletingPostId(postId)
+      setDeletingPostId(postId);
       await axios.delete(`/api/posts/${postId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-      })
+      });
 
-      toast.success('Post deleted')
-      setPosts((prev) => prev.filter((post) => post._id !== postId))
+      toast.success("Post deleted");
+      setPosts((prev) => prev.filter((post) => post._id !== postId));
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Could not delete the post. Try again!')
+      toast.error(
+        error.response?.data?.message || "Could not delete the post. Try again!"
+      );
     } finally {
-      setDeletingPostId(null)
-      setOpenMenuId(null)
+      setDeletingPostId(null);
+      setOpenMenuId(null);
     }
-  }
+  };
 
   if (!user) {
-    return <Landing />
+    return <Landing />;
   }
 
   const handleStartEdit = (post) => {
-    setEditingPostId(post._id)
+    setEditingPostId(post._id);
     setEditingFields({
-      title: post.title || '',
-      content: post.content || '',
-    })
-    setRemoveExistingImage(false)
-    setEditingImageFile(null)
+      title: post.title || "",
+      content: post.content || "",
+    });
+    setRemoveExistingImage(false);
+    setEditingImageFile(null);
     setEditingImagePreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev)
-      return null
-    })
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
     if (editingFileInputRef.current) {
-      editingFileInputRef.current.value = ''
+      editingFileInputRef.current.value = "";
     }
-    setOpenMenuId(null)
-  }
+    setOpenMenuId(null);
+  };
 
   const handleCancelEdit = () => {
-    setEditingPostId(null)
-    setEditingFields({ title: '', content: '' })
-    setRemoveExistingImage(false)
-    setEditingImageFile(null)
+    setEditingPostId(null);
+    setEditingFields({ title: "", content: "" });
+    setRemoveExistingImage(false);
+    setEditingImageFile(null);
     setEditingImagePreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev)
-      return null
-    })
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
     if (editingFileInputRef.current) {
-      editingFileInputRef.current.value = ''
+      editingFileInputRef.current.value = "";
     }
-  }
+  };
 
   const handleEditingImageChange = (event) => {
-    const file = event.target.files?.[0]
+    const file = event.target.files?.[0];
 
-    if (!file) return
+    if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please choose an image file (JPG, PNG, etc.).')
-      event.target.value = ''
-      return
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please choose an image file (JPG, PNG, etc.).");
+      event.target.value = "";
+      return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be 5MB or smaller.')
-      event.target.value = ''
-      return
+      toast.error("Image must be 5MB or smaller.");
+      event.target.value = "";
+      return;
     }
 
     setEditingImagePreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev)
-      return null
-    })
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
 
-    setRemoveExistingImage(false)
-    const previewUrl = URL.createObjectURL(file)
-    setEditingImageFile(file)
-    setEditingImagePreview(previewUrl)
-  }
+    setRemoveExistingImage(false);
+    const previewUrl = URL.createObjectURL(file);
+    setEditingImageFile(file);
+    setEditingImagePreview(previewUrl);
+  };
 
   const handleRemoveEditingImage = () => {
-    setEditingImageFile(null)
+    setEditingImageFile(null);
     setEditingImagePreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev)
-      return null
-    })
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
     if (editingFileInputRef.current) {
-      editingFileInputRef.current.value = ''
+      editingFileInputRef.current.value = "";
     }
-  }
+  };
 
   const handleUpdatePost = async (event) => {
-    event.preventDefault()
-    if (!editingPostId) return
+    event.preventDefault();
+    if (!editingPostId) return;
 
-    const title = editingFields.title.trim()
-    const content = editingFields.content.trim()
+    const title = editingFields.title.trim();
+    const content = editingFields.content.trim();
 
     if (!title || !content) {
-      toast.error('Title and content are required.')
-      return
+      toast.error("Title and content are required.");
+      return;
     }
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem("token");
 
     if (!token) {
-      toast.error('You need to be logged in to edit this post.')
-      return
+      toast.error("You need to be logged in to edit this post.");
+      return;
     }
 
     try {
-      setIsUpdating(true)
-      const formData = new FormData()
-      formData.append('title', title)
-      formData.append('content', content)
+      setIsUpdating(true);
+      const formData = new FormData();
+      formData.append("title", title);
+      formData.append("content", content);
 
       if (editingImageFile) {
-        formData.append('image', editingImageFile)
+        formData.append("image", editingImageFile);
       } else if (removeExistingImage) {
-        formData.append('removeImage', 'true')
+        formData.append("removeImage", "true");
       }
 
-      const response = await axios.put(`/api/posts/${editingPostId}`, formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await axios.put(
+        `/api/posts/${editingPostId}`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-      const updatedPost = response.data?.post
+      const updatedPost = response.data?.post;
       if (updatedPost) {
-        setPosts((prev) => prev.map((post) => (post._id === updatedPost._id ? updatedPost : post)))
+        setPosts((prev) =>
+          prev.map((post) =>
+            post._id === updatedPost._id ? updatedPost : post
+          )
+        );
       } else {
-        fetchPosts()
+        fetchPosts();
       }
-      toast.success('Post updated')
-      handleCancelEdit()
+      toast.success("Post updated");
+      handleCancelEdit();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Could not update the post. Try again!')
+      toast.error(
+        error.response?.data?.message || "Could not update the post. Try again!"
+      );
     } finally {
-      setIsUpdating(false)
+      setIsUpdating(false);
     }
-  }
+  };
 
   if (!user) {
-    return <Landing />
+    return <Landing />;
   }
 
   return (
-    <div className='min-h-screen bg-gray-100/60 py-8 px-4 sm:px-6 lg:px-10'>
-      <div className='max-w-6xl mx-auto'>
-        <header className='mb-8 flex flex-col gap-2'>
-          <span className='uppercase tracking-[0.4em] text-xs text-gray-500'>Daily Feed</span>
-          <h1 className='text-3xl sm:text-4xl font-extrabold text-gray-900'>Welcome back, {user.username}</h1>
-          <p className='text-gray-500 text-sm sm:text-base'>Catch up with creators you follow and share something new.</p>
+    <div className="min-h-screen bg-gray-100/60 py-8 px-4 sm:px-6 lg:px-10">
+      <div className="max-w-6xl mx-auto">
+        <header className="mb-8 flex flex-col gap-2">
+          <span className="uppercase tracking-[0.4em] text-xs text-gray-500">
+            Daily Feed
+          </span>
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900">
+            Welcome back, {user.username}
+          </h1>
+          <p className="text-gray-500 text-sm sm:text-base">
+            Catch up with creators you follow and share something new.
+          </p>
         </header>
 
-        <section className='mb-10'>
-          <div className='flex items-center gap-2 mb-4'>
-            <h2 className='text-lg font-semibold text-gray-800'>Stories</h2>
-            <span className='text-xs font-medium text-pink-500'>LIVE</span>
+        <section className="mb-10">
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-lg font-semibold text-gray-800">Stories</h2>
+            <span className="text-xs font-medium text-pink-500">LIVE</span>
           </div>
-          <div className='overflow-x-auto flex gap-5 pb-2 scrollbar-thin scrollbar-thumb-gray-300'>
+          <div className="overflow-x-auto flex gap-5 pb-2 scrollbar-thin scrollbar-thumb-gray-300">
             {storyItems.map((story, index) => (
               <button
                 key={story.id || index}
-                type='button'
-                className='flex flex-col items-center space-y-2 focus:outline-none'
+                type="button"
+                className="flex flex-col items-center space-y-2 focus:outline-none"
               >
                 <span
                   className={`relative h-20 w-20 rounded-full p-[3px] bg-linear-to-tr ${story.gradient}`}
                 >
-                  <span className='absolute inset-0 rounded-full bg-white/20 blur-sm' />
-                  <span className='relative h-full w-full flex items-center justify-center rounded-full bg-white text-gray-800 font-semibold text-xl overflow-hidden'>
+                  <span className="absolute inset-0 rounded-full bg-white/20 blur-sm" />
+                  <span className="relative h-full w-full flex items-center justify-center rounded-full bg-white text-gray-800 font-semibold text-xl overflow-hidden">
                     {story.imageUrl ? (
                       <img
                         src={story.imageUrl}
                         alt={`${story.name} profile`}
-                        className='h-full w-full object-cover'
+                        className="h-full w-full object-cover"
                       />
                     ) : (
                       story.initials
                     )}
                   </span>
                   {story.isUser && (
-                    <span className='absolute -bottom-1 -right-1 h-8 w-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-xl'>
+                    <span className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-xl">
                       +
                     </span>
                   )}
                 </span>
-                <span className='text-xs font-medium text-gray-600 max-w-[80px] truncate'>{story.name}</span>
+                <span className="text-xs font-medium text-gray-600 max-w-[80px] truncate">
+                  {story.name}
+                </span>
               </button>
             ))}
           </div>
         </section>
 
-        <main className='grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)] gap-8'>
-          <div className='space-y-6 flex flex-col items-center'>
-            <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 backdrop-blur-sm max-w-xl w-full'>
-              <div className='flex gap-3'>
-                <div
-                  className={`h-12 w-12 rounded-full overflow-hidden flex items-center justify-center font-semibold text-lg ${
-                    user?.profileImageUrl
-                      ? ''
-                      : 'bg-linear-to-br from-blue-500 to-indigo-500 text-white'
-                  }`}
-                >
-                  {user?.profileImageUrl ? (
-                    <img
-                      src={user.profileImageUrl}
-                      alt={`${user.username} avatar`}
-                      className='h-full w-full object-cover'
-                    />
-                  ) : (
-                    getInitials(user.username)
-                  )}
-                </div>
-                <form onSubmit={handleCreatePost} className='flex-1 space-y-4'>
-                  <input
-                    type='text'
-                    value={newPost.title}
-                    onChange={(event) => setNewPost((prev) => ({ ...prev, title: event.target.value }))}
-                    placeholder="Give your post a catchy title..."
-                    className='w-full border border-gray-200 focus:border-gray-400 rounded-xl px-4 py-3 text-sm sm:text-base outline-none transition-colors'
-                  />
-                  <textarea
-                    rows={3}
-                    value={newPost.content}
-                    onChange={(event) => setNewPost((prev) => ({ ...prev, content: event.target.value }))}
-                    placeholder="What's happening today? Share a thought, a win, or something inspiring."
-                    className='w-full border border-gray-200 focus:border-gray-400 rounded-xl px-4 py-3 text-sm sm:text-base outline-none transition-colors resize-none'
-                  />
-                  <div className='border border-dashed border-gray-300 rounded-xl px-4 py-4 bg-gray-50/60'>
-                    {imagePreview ? (
-                      <div
-                        className='relative overflow-hidden rounded-lg'
-                        style={{ aspectRatio: '1 / 1' }}
-                      >
-                        <img
-                          src={imagePreview}
-                          alt='Selected preview'
-                          className='absolute inset-0 w-full h-full object-cover'
-                        />
-                        <button
-                          type='button'
-                          onClick={handleRemoveImage}
-                          className='absolute top-3 right-3 inline-flex items-center gap-1 bg-black/60 text-white text-xs font-medium px-3 py-1.5 rounded-full hover:bg-black/80 transition'
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ) : (
-                      <label
-                        htmlFor='post-image-upload'
-                        className='flex flex-col items-center justify-center h-32 text-sm text-gray-500 gap-2 cursor-pointer hover:text-gray-700'
-                      >
-                        <span className='inline-flex items-center justify-center h-12 w-12 rounded-full bg-white text-gray-400 border border-gray-200'>
-                          📷
-                        </span>
-                        <span className='font-medium'>Add a cover image (optional)</span>
-                        <span className='text-xs text-gray-400'>JPG, PNG up to 5MB</span>
-                        <input
-                          id='post-image-upload'
-                          ref={fileInputRef}
-                          type='file'
-                          accept='image/*'
-                          onChange={handleImageChange}
-                          className='hidden'
-                        />
-                      </label>
-                    )}
-                  </div>
-                  <div className='flex items-center justify-between'>
-                    <div className='flex gap-2 text-sm text-gray-400'>
-                      <span className='bg-gray-100 text-gray-500 px-3 py-1 rounded-full'>#moments</span>
-                      <span className='bg-gray-100 text-gray-500 px-3 py-1 rounded-full'>#daily</span>
-                      <span className='hidden sm:inline bg-gray-100 text-gray-500 px-3 py-1 rounded-full'>#community</span>
-                    </div>
-                    <button
-                      type='submit'
-                      disabled={isSubmitting}
-                      className='inline-flex items-center gap-2 bg-linear-to-r from-pink-500 via-red-500 to-yellow-500 text-white font-semibold px-5 py-2 rounded-full shadow-sm hover:shadow-md disabled:opacity-60 disabled:cursor-not-allowed transition'
-                    >
-                      {isSubmitting ? 'Sharing…' : 'Share'}
-                    </button>
-              </div>
-                </form>
-              </div>
-            </div>
+        <main className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)] gap-8">
+          <div className="space-y-6 flex flex-col items-center">
+            <CreatePostComposer
+              user={user}
+              onPostCreated={handlePostCreated}
+              onPostCreatedFallback={fetchPosts}
+            />
 
-            <div className='space-y-5'>
+            <div className="space-y-5">
               {loading && (
-                <div className='space-y-3 w-full flex flex-col items-center'>
+                <div className="space-y-3 w-full flex flex-col items-center">
                   {Array.from({ length: 3 }).map((_, index) => (
-                    <div key={index} className='bg-white rounded-2xl shadow-sm p-6 animate-pulse max-w-xl w-full'>
-                      <div className='flex items-center gap-4 mb-4'>
-                        <div className='h-12 w-12 rounded-full bg-gray-200' />
-                        <div className='flex-1 space-y-2'>
-                          <div className='h-3 w-1/3 bg-gray-200 rounded-full' />
-                          <div className='h-3 w-1/4 bg-gray-200 rounded-full' />
+                    <div
+                      key={index}
+                      className="bg-white rounded-2xl shadow-sm p-6 animate-pulse max-w-xl w-full"
+                    >
+                      <div className="flex items-center gap-4 mb-4">
+                        <div className="h-12 w-12 rounded-full bg-gray-200" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-3 w-1/3 bg-gray-200 rounded-full" />
+                          <div className="h-3 w-1/4 bg-gray-200 rounded-full" />
                         </div>
                       </div>
-                      <div className='h-48 rounded-xl bg-gray-200' />
+                      <div className="h-48 rounded-xl bg-gray-200" />
                     </div>
                   ))}
                 </div>
               )}
 
               {fetchError && !loading && (
-                <div className='bg-white border border-red-100 rounded-2xl p-6 text-red-500 text-sm max-w-xl w-full'>
+                <div className="bg-white border border-red-100 rounded-2xl p-6 text-red-500 text-sm max-w-xl w-full">
                   {fetchError}
                   <button
-                    type='button'
+                    type="button"
                     onClick={fetchPosts}
-                    className='ml-3 text-red-600 underline font-medium'
+                    className="ml-3 text-red-600 underline font-medium"
                   >
                     Try again
                   </button>
-          </div>
+                </div>
               )}
 
               {!loading && !posts.length && !fetchError && (
-                <div className='bg-white rounded-2xl border border-dashed border-gray-200 p-10 text-center space-y-3 max-w-xl w-full'>
-                  <h3 className='text-xl font-semibold text-gray-800'>Your feed is waiting</h3>
-                  <p className='text-gray-500 text-sm'>Follow more creators or share something to see it appear here.</p>
+                <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-10 text-center space-y-3 max-w-xl w-full">
+                  <h3 className="text-xl font-semibold text-gray-800">
+                    Your feed is waiting
+                  </h3>
+                  <p className="text-gray-500 text-sm">
+                    Follow more creators or share something to see it appear
+                    here.
+                  </p>
                   <button
-                    type='button'
+                    type="button"
                     onClick={handleBoostProfile}
-                    className='inline-flex items-center gap-2 px-5 py-2 rounded-full bg-blue-500 text-white font-medium hover:bg-blue-600 transition'
+                    className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-blue-500 text-white font-medium hover:bg-blue-600 transition"
                   >
                     Boost your profile
                   </button>
-              </div>
+                </div>
               )}
 
               {posts.map((post, index) => {
-                const authorName = post.author_id?.username || 'Unknown creator'
-                const authorImageUrl = post.author_id?.profileImageUrl
-                const createdLabel = relativeTimeFromNow(post.createdAt)
-                const backgroundGradient = getGradientForIndex(index)
-                const isFavorited = favoritePostIds.has(post._id)
-                const currentUserId = user?._id || user?.id
+                const authorName =
+                  post.author_id?.username || "Unknown creator";
+                const authorImageUrl = post.author_id?.profileImageUrl;
+                const createdLabel = relativeTimeFromNow(post.createdAt);
+                const backgroundGradient = getGradientForIndex(index);
+                const isFavorited = favoritePostIds.has(post._id);
+                const currentUserId = user?._id || user?.id;
                 const postAuthorId =
-                  (post && typeof post.author_id === 'string' && post.author_id) ||
+                  (post &&
+                    typeof post.author_id === "string" &&
+                    post.author_id) ||
                   post.author_id?._id ||
-                  post.author_id?.id
+                  post.author_id?.id;
                 const isOwner =
                   currentUserId && postAuthorId
                     ? String(currentUserId) === String(postAuthorId)
-                    : false
-                const isDeleting = deletingPostId === post._id
-                const isEditing = editingPostId === post._id
-                const likesArray = Array.isArray(post.likes) ? post.likes : []
-                const commentsArray = Array.isArray(post.comments) ? post.comments : []
-                const likesCount = likesArray.length
-                const commentsCount = commentsArray.length
+                    : false;
+                const isDeleting = deletingPostId === post._id;
+                const isEditing = editingPostId === post._id;
+                const likesArray = Array.isArray(post.likes) ? post.likes : [];
+                const commentsArray = Array.isArray(post.comments)
+                  ? post.comments
+                  : [];
+                const likesCount = likesArray.length;
+                const commentsCount = commentsArray.length;
                 const hasLiked =
                   likesArray.length > 0 && currentUserId
                     ? likesArray.some((like) => {
                         const likeId =
-                          typeof like === 'string'
+                          typeof like === "string"
                             ? like
-                            : like?._id || like?.id || like
-                        return likeId && String(likeId) === String(currentUserId)
+                            : like?._id || like?.id || like;
+                        return (
+                          likeId && String(likeId) === String(currentUserId)
+                        );
                       })
-                    : false
-                const isCommentsOpen = openCommentsId === post._id
-                const commentDraft = commentDrafts[post._id] || ''
-                const isLiking = !!pendingLikes[post._id]
-                const isSubmittingComment = !!pendingComments[post._id]
+                    : false;
+                const isCommentsOpen = openCommentsId === post._id;
+                const commentDraft = commentDrafts[post._id] || "";
+                const isLiking = !!pendingLikes[post._id];
+                const isSubmittingComment = !!pendingComments[post._id];
 
                 return (
-                  <article key={post._id || index} className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden max-w-xl w-full'>
-                    <header className='flex items-center gap-4 px-6 py-4 relative'>
+                  <article
+                    key={post._id || index}
+                    className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden max-w-xl w-full"
+                  >
+                    <header className="flex items-center gap-4 px-6 py-4 relative">
                       <div
                         className={`h-12 w-12 rounded-full overflow-hidden flex items-center justify-center font-semibold text-lg ${
-                          authorImageUrl ? '' : `bg-linear-to-br ${backgroundGradient} text-white`
+                          authorImageUrl
+                            ? ""
+                            : `bg-linear-to-br ${backgroundGradient} text-white`
                         }`}
                       >
                         {authorImageUrl ? (
                           <img
                             src={authorImageUrl}
                             alt={`${authorName} avatar`}
-                            className='h-full w-full object-cover'
+                            className="h-full w-full object-cover"
                           />
                         ) : (
                           getInitials(authorName)
                         )}
                       </div>
-                      <div className='flex-1'>
-                        <h3 className='font-semibold text-gray-900'>{authorName}</h3>
-                        <p className='text-xs text-gray-500'>{createdLabel}</p>
-            </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900">
+                          {authorName}
+                        </h3>
+                        <p className="text-xs text-gray-500">{createdLabel}</p>
+                      </div>
                       {isEditing ? (
-                        <span className='text-xs font-semibold text-blue-500 uppercase'>Editing</span>
+                        <span className="text-xs font-semibold text-blue-500 uppercase">
+                          Editing
+                        </span>
                       ) : (
                         <button
-                          type='button'
+                          type="button"
                           data-post-menu-trigger
                           onClick={(event) => handleMenuToggle(event, post._id)}
-                          className='text-gray-400 hover:text-gray-600'
+                          className="text-gray-400 hover:text-gray-600"
                         >
-                          <span className='text-lg'>•••</span>
+                          <span className="text-lg">•••</span>
                         </button>
                       )}
 
                       {!isEditing && openMenuId === post._id && (
                         <div
                           data-post-menu-content
-                          className='absolute top-14 right-6 w-44 bg-white border border-gray-100 rounded-xl shadow-lg py-2 z-10'
+                          className="absolute top-14 right-6 w-44 bg-white border border-gray-100 rounded-xl shadow-lg py-2 z-10"
                         >
                           <button
-                            type='button'
+                            type="button"
                             onClick={() => handleToggleFavorite(post._id)}
-                            className='w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between'
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between"
                           >
-                            <span>{isFavorited ? 'Remove favorite' : 'Add to favorites'}</span>
-                            <span className='text-base'>{isFavorited ? '★' : '☆'}</span>
+                            <span>
+                              {isFavorited
+                                ? "Remove favorite"
+                                : "Add to favorites"}
+                            </span>
+                            <span className="text-base">
+                              {isFavorited ? "★" : "☆"}
+                            </span>
                           </button>
                           {isOwner && (
                             <>
                               <button
-                                type='button'
+                                type="button"
                                 onClick={() => handleStartEdit(post)}
-                                className='w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between'
+                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between"
                               >
                                 <span>Edit post</span>
                                 <span>✏️</span>
                               </button>
                               <button
-                                type='button'
+                                type="button"
                                 onClick={() => handleDeletePost(post._id)}
-                                className='w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 flex items-center justify-between disabled:opacity-60 disabled:cursor-not-allowed'
+                                className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 flex items-center justify-between disabled:opacity-60 disabled:cursor-not-allowed"
                                 disabled={isDeleting}
                               >
-                                <span>{isDeleting ? 'Deleting…' : 'Delete post'}</span>
+                                <span>
+                                  {isDeleting ? "Deleting…" : "Delete post"}
+                                </span>
                                 <span>🗑️</span>
                               </button>
                             </>
@@ -1047,74 +967,87 @@ export const Home = ({ user, onUserUpdated, onProfileHandlersReady }) => {
                     </header>
 
                     {isEditing ? (
-                      <form onSubmit={handleUpdatePost} className='px-6 py-5 space-y-5 bg-gray-50/70 border-t border-gray-100'>
-                        <div className='space-y-3'>
-                          <label className='block text-xs font-semibold uppercase tracking-wide text-gray-500'>Title</label>
+                      <form
+                        onSubmit={handleUpdatePost}
+                        className="px-6 py-5 space-y-5 bg-gray-50/70 border-t border-gray-100"
+                      >
+                        <div className="space-y-3">
+                          <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            Title
+                          </label>
                           <input
-                            type='text'
+                            type="text"
                             value={editingFields.title}
                             onChange={(event) =>
-                              setEditingFields((prev) => ({ ...prev, title: event.target.value }))
+                              setEditingFields((prev) => ({
+                                ...prev,
+                                title: event.target.value,
+                              }))
                             }
-                            className='w-full border border-gray-300 rounded-lg px-4 py-2 text-sm outline-none focus:border-gray-500'
+                            className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm outline-none focus:border-gray-500"
                           />
                         </div>
-                        <div className='space-y-3'>
-                          <label className='block text-xs font-semibold uppercase tracking-wide text-gray-500'>Content</label>
+                        <div className="space-y-3">
+                          <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            Content
+                          </label>
                           <textarea
                             rows={4}
                             value={editingFields.content}
                             onChange={(event) =>
-                              setEditingFields((prev) => ({ ...prev, content: event.target.value }))
+                              setEditingFields((prev) => ({
+                                ...prev,
+                                content: event.target.value,
+                              }))
                             }
-                            className='w-full border border-gray-300 rounded-lg px-4 py-2 text-sm outline-none focus:border-gray-500 resize-none'
+                            className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm outline-none focus:border-gray-500 resize-none"
                           />
                         </div>
-                        <div className='border border-dashed border-gray-300 rounded-xl px-4 py-4 bg-white/60'>
+                        <div className="border border-dashed border-gray-300 rounded-xl px-4 py-4 bg-white/60">
                           {editingImagePreview ? (
                             <div
-                              className='relative overflow-hidden rounded-lg'
-                              style={{ aspectRatio: '1 / 1' }}
+                              className="relative overflow-hidden rounded-lg"
+                              style={{ aspectRatio: "1 / 1" }}
                             >
                               <img
                                 src={editingImagePreview}
-                                alt='New image preview'
-                                className='absolute inset-0 w-full h-full object-cover'
+                                alt="New image preview"
+                                className="absolute inset-0 w-full h-full object-cover"
                               />
                               <button
-                                type='button'
+                                type="button"
                                 onClick={handleRemoveEditingImage}
-                                className='absolute top-3 right-3 inline-flex items-center gap-1 bg-black/60 text-white text-xs font-medium px-3 py-1.5 rounded-full hover:bg-black/80 transition'
+                                className="absolute top-3 right-3 inline-flex items-center gap-1 bg-black/60 text-white text-xs font-medium px-3 py-1.5 rounded-full hover:bg-black/80 transition"
                               >
                                 Remove
                               </button>
                             </div>
                           ) : !removeExistingImage && post.imageUrl ? (
                             <div
-                              className='relative overflow-hidden rounded-lg'
-                              style={{ aspectRatio: '1 / 1' }}
+                              className="relative overflow-hidden rounded-lg"
+                              style={{ aspectRatio: "1 / 1" }}
                             >
                               <img
                                 src={post.imageUrl}
-                                alt={post.title || 'Current post image'}
-                                className='absolute inset-0 w-full h-full object-cover'
+                                alt={post.title || "Current post image"}
+                                className="absolute inset-0 w-full h-full object-cover"
                               />
-                              <div className='absolute top-3 right-3 flex gap-2'>
+                              <div className="absolute top-3 right-3 flex gap-2">
                                 <button
-                                  type='button'
+                                  type="button"
                                   onClick={() => {
                                     if (editingFileInputRef.current) {
-                                      editingFileInputRef.current.click()
+                                      editingFileInputRef.current.click();
                                     }
                                   }}
-                                  className='px-3 py-1.5 text-xs font-medium bg-white text-gray-700 rounded-full shadow-sm hover:bg-gray-100'
+                                  className="px-3 py-1.5 text-xs font-medium bg-white text-gray-700 rounded-full shadow-sm hover:bg-gray-100"
                                 >
                                   Change
                                 </button>
                                 <button
-                                  type='button'
+                                  type="button"
                                   onClick={() => setRemoveExistingImage(true)}
-                                  className='px-3 py-1.5 text-xs font-medium bg-red-500 text-white rounded-full shadow-sm hover:bg-red-600'
+                                  className="px-3 py-1.5 text-xs font-medium bg-red-500 text-white rounded-full shadow-sm hover:bg-red-600"
                                 >
                                   Remove
                                 </button>
@@ -1123,39 +1056,43 @@ export const Home = ({ user, onUserUpdated, onProfileHandlersReady }) => {
                           ) : (
                             <label
                               htmlFor={`edit-image-${post._id}`}
-                              className='flex flex-col items-center justify-center text-sm text-gray-500 gap-2 cursor-pointer hover:text-gray-700'
-                              style={{ aspectRatio: '1 / 1' }}
+                              className="flex flex-col items-center justify-center text-sm text-gray-500 gap-2 cursor-pointer hover:text-gray-700"
+                              style={{ aspectRatio: "1 / 1" }}
                             >
-                              <span className='inline-flex items-center justify-center h-10 w-10 rounded-full bg-white text-gray-400 border border-gray-200'>
+                              <span className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-white text-gray-400 border border-gray-200">
                                 📷
                               </span>
-                              <span className='font-medium'>Add an image (optional)</span>
-                              <span className='text-xs text-gray-400'>JPG, PNG up to 5MB</span>
+                              <span className="font-medium">
+                                Add an image (optional)
+                              </span>
+                              <span className="text-xs text-gray-400">
+                                JPG, PNG up to 5MB
+                              </span>
                               <input
                                 id={`edit-image-${post._id}`}
                                 ref={editingFileInputRef}
-                                type='file'
-                                accept='image/*'
+                                type="file"
+                                accept="image/*"
                                 onChange={handleEditingImageChange}
-                                className='hidden'
+                                className="hidden"
                               />
                             </label>
                           )}
                         </div>
-                        <div className='flex justify-end gap-3'>
+                        <div className="flex justify-end gap-3">
                           <button
-                            type='button'
+                            type="button"
                             onClick={handleCancelEdit}
-                            className='px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-full hover:bg-gray-50'
+                            className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-full hover:bg-gray-50"
                           >
                             Cancel
                           </button>
                           <button
-                            type='submit'
+                            type="submit"
                             disabled={isUpdating}
-                            className='px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-full shadow-sm hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed'
+                            className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-full shadow-sm hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
                           >
-                            {isUpdating ? 'Saving…' : 'Save changes'}
+                            {isUpdating ? "Saving…" : "Save changes"}
                           </button>
                         </div>
                       </form>
@@ -1163,76 +1100,99 @@ export const Home = ({ user, onUserUpdated, onProfileHandlersReady }) => {
                       <>
                         {post.imageUrl ? (
                           <div
-                            className='relative bg-black overflow-hidden'
-                            style={{ aspectRatio: '1 / 1' }}
+                            className="relative bg-black overflow-hidden"
+                            style={{ aspectRatio: "1 / 1" }}
                           >
                             <img
                               src={post.imageUrl}
-                              alt={post.title || 'Post image'}
-                              className='absolute inset-0 w-full h-full object-cover'
-                              loading='lazy'
+                              alt={post.title || "Post image"}
+                              className="absolute inset-0 w-full h-full object-cover"
+                              loading="lazy"
                             />
-                            <div className='absolute inset-0 bg-black/15' />
+                            <div className="absolute inset-0 bg-black/15" />
                           </div>
                         ) : (
                           <div
                             className={`relative bg-linear-to-br ${backgroundGradient}`}
-                            style={{ aspectRatio: '1 / 1' }}
+                            style={{ aspectRatio: "1 / 1" }}
                           >
-                            <div className='absolute inset-0 bg-black/10 mix-blend-multiply rounded-none' />
+                            <div className="absolute inset-0 bg-black/10 mix-blend-multiply rounded-none" />
                           </div>
                         )}
 
-                        <section className='px-6 py-5 space-y-4'>
-                          <h2 className='text-2xl font-bold text-gray-900'>{post.title}</h2>
-                          <p className='text-gray-700 leading-relaxed whitespace-pre-line'>{post.content}</p>
-                          <div className='flex items-center justify-start gap-6 text-sm text-gray-500'>
+                        <section className="px-6 py-5 space-y-4">
+                          <h2 className="text-2xl font-bold text-gray-900">
+                            {post.title}
+                          </h2>
+                          <p className="text-gray-700 leading-relaxed whitespace-pre-line">
+                            {post.content}
+                          </p>
+                          <div className="flex items-center justify-start gap-6 text-sm text-gray-500">
                             <button
-                              type='button'
+                              type="button"
                               onClick={() => handleToggleLike(post._id)}
                               disabled={isLiking}
                               className={`inline-flex items-center gap-2 transition text-base ${
-                                hasLiked ? 'text-red-500' : 'hover:text-gray-700'
-                              } ${isLiking ? 'opacity-60 cursor-not-allowed' : ''}`}
-                            >
-                              <span className='text-2xl leading-none'>{hasLiked ? '❤️' : '🤍'}</span>
-                              <span className='font-medium'>{likesCount}</span>
-                            </button>
-                            <button
-                              type='button'
-                              onClick={() => handleToggleComments(post._id)}
-                              className={`inline-flex items-center gap-2 transition text-base ${
-                                isCommentsOpen ? 'text-blue-500' : 'hover:text-gray-700'
+                                hasLiked
+                                  ? "text-red-500"
+                                  : "hover:text-gray-700"
+                              } ${
+                                isLiking ? "opacity-60 cursor-not-allowed" : ""
                               }`}
                             >
-                              <span className='text-2xl leading-none'>💬</span>
-                              <span className='font-medium'>{commentsCount}</span>
+                              <span className="text-2xl leading-none">
+                                {hasLiked ? "❤️" : "🤍"}
+                              </span>
+                              <span className="font-medium">{likesCount}</span>
                             </button>
-                            <span className='inline-flex items-center gap-2 text-gray-400 text-base'>
-                              <span className='text-2xl leading-none'>🔁</span>
-                              <span className='font-medium'>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleComments(post._id)}
+                              className={`inline-flex items-center gap-2 transition text-base ${
+                                isCommentsOpen
+                                  ? "text-blue-500"
+                                  : "hover:text-gray-700"
+                              }`}
+                            >
+                              <span className="text-2xl leading-none">💬</span>
+                              <span className="font-medium">
+                                {commentsCount}
+                              </span>
+                            </button>
+                            <span className="inline-flex items-center gap-2 text-gray-400 text-base">
+                              <span className="text-2xl leading-none">🔁</span>
+                              <span className="font-medium">
                                 {Math.floor(Math.random() * 10) + 1}
                               </span>
                             </span>
-              </div>
+                          </div>
 
                           {isCommentsOpen && (
-                            <div className='border-t border-gray-100 pt-4 space-y-4'>
-                              <div className='space-y-3 max-h-64 overflow-y-auto pr-1'>
+                            <div className="border-t border-gray-100 pt-4 space-y-4">
+                              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
                                 {commentsCount ? (
                                   commentsArray.map((comment, commentIndex) => {
-                                    const commentUser = comment.user
+                                    const commentUser = comment.user;
                                     const commentAuthorName =
-                                      (typeof commentUser === 'object' && commentUser?.username) || 'Anonymous'
+                                      (typeof commentUser === "object" &&
+                                        commentUser?.username) ||
+                                      "Anonymous";
                                     const commentAvatarUrl =
-                                      typeof commentUser === 'object' ? commentUser?.profileImageUrl : null
-                                    const commentGradient = getGradientForIndex(commentIndex + index)
+                                      typeof commentUser === "object"
+                                        ? commentUser?.profileImageUrl
+                                        : null;
+                                    const commentGradient = getGradientForIndex(
+                                      commentIndex + index
+                                    );
                                     return (
-                                      <div key={comment._id || commentIndex} className='flex gap-3'>
+                                      <div
+                                        key={comment._id || commentIndex}
+                                        className="flex gap-3"
+                                      >
                                         <div
                                           className={`h-8 w-8 rounded-full overflow-hidden flex items-center justify-center text-xs font-semibold ${
                                             commentAvatarUrl
-                                              ? ''
+                                              ? ""
                                               : `bg-linear-to-br ${commentGradient} text-white`
                                           }`}
                                         >
@@ -1240,48 +1200,61 @@ export const Home = ({ user, onUserUpdated, onProfileHandlersReady }) => {
                                             <img
                                               src={commentAvatarUrl}
                                               alt={`${commentAuthorName} avatar`}
-                                              className='h-full w-full object-cover'
+                                              className="h-full w-full object-cover"
                                             />
                                           ) : (
                                             getInitials(commentAuthorName)
                                           )}
                                         </div>
-                                        <div className='flex-1 bg-gray-50 rounded-2xl px-4 py-3 space-y-1'>
-                                          <div className='flex items-center justify-between text-xs text-gray-500'>
-                                            <span className='font-semibold text-gray-700'>
+                                        <div className="flex-1 bg-gray-50 rounded-2xl px-4 py-3 space-y-1">
+                                          <div className="flex items-center justify-between text-xs text-gray-500">
+                                            <span className="font-semibold text-gray-700">
                                               {commentAuthorName}
                                             </span>
-                                            <span>{relativeTimeFromNow(comment.createdAt)}</span>
+                                            <span>
+                                              {relativeTimeFromNow(
+                                                comment.createdAt
+                                              )}
+                                            </span>
                                           </div>
-                                          <p className='text-sm text-gray-700 whitespace-pre-line'>
+                                          <p className="text-sm text-gray-700 whitespace-pre-line">
                                             {comment.text}
                                           </p>
                                         </div>
                                       </div>
-                                    )
+                                    );
                                   })
                                 ) : (
-                                  <p className='text-sm text-gray-500'>Be the first to comment on this post.</p>
+                                  <p className="text-sm text-gray-500">
+                                    Be the first to comment on this post.
+                                  </p>
                                 )}
                               </div>
                               <form
-                                onSubmit={(event) => handleSubmitComment(event, post._id)}
-                                className='flex items-center gap-3'
+                                onSubmit={(event) =>
+                                  handleSubmitComment(event, post._id)
+                                }
+                                className="flex items-center gap-3"
                               >
                                 <input
-                                  type='text'
+                                  type="text"
                                   value={commentDraft}
-                                  onChange={(event) => handleCommentDraftChange(post._id, event.target.value)}
-                                  placeholder='Add a comment...'
-                                  className='flex-1 border border-gray-200 rounded-full px-4 py-2 text-sm focus:border-gray-400 focus:outline-none'
+                                  onChange={(event) =>
+                                    handleCommentDraftChange(
+                                      post._id,
+                                      event.target.value
+                                    )
+                                  }
+                                  placeholder="Add a comment..."
+                                  className="flex-1 border border-gray-200 rounded-full px-4 py-2 text-sm focus:border-gray-400 focus:outline-none"
                                   maxLength={500}
                                 />
                                 <button
-                                  type='submit'
+                                  type="submit"
                                   disabled={isSubmittingComment}
-                                  className='px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-full hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed'
+                                  className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-full hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
                                 >
-                                  {isSubmittingComment ? 'Posting…' : 'Post'}
+                                  {isSubmittingComment ? "Posting…" : "Post"}
                                 </button>
                               </form>
                             </div>
@@ -1290,77 +1263,99 @@ export const Home = ({ user, onUserUpdated, onProfileHandlersReady }) => {
                       </>
                     )}
                   </article>
-                )
+                );
               })}
+            </div>
           </div>
-        </div>
 
-          <aside className='space-y-6'>
-            <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4'>
-              <div className='flex items-center gap-3'>
+          <aside className="space-y-6">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+              <div className="flex items-center gap-3">
                 <div
                   className={`h-12 w-12 rounded-full overflow-hidden flex items-center justify-center font-semibold text-lg ${
                     user?.profileImageUrl
-                      ? ''
-                      : 'bg-linear-to-br from-blue-500 to-indigo-500 text-white'
+                      ? ""
+                      : "bg-linear-to-br from-blue-500 to-indigo-500 text-white"
                   }`}
                 >
                   {user?.profileImageUrl ? (
                     <img
                       src={user.profileImageUrl}
                       alt={`${user.username} avatar`}
-                      className='h-full w-full object-cover'
+                      className="h-full w-full object-cover"
                     />
                   ) : (
                     getInitials(user.username)
                   )}
                 </div>
                 <div>
-                  <p className='font-semibold text-gray-900'>{user.username}</p>
-                  <p className='text-xs text-gray-500'>{user.email}</p>
+                  <p className="font-semibold text-gray-900">{user.username}</p>
+                  <p className="text-xs text-gray-500">{user.email}</p>
                 </div>
               </div>
             </div>
 
-            <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4'>
-              <h3 className='text-sm font-semibold text-gray-900 uppercase tracking-wide'>Suggested for you</h3>
-              <div className='space-y-4'>
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+              <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
+                Suggested for you
+              </h3>
+              <div className="space-y-4">
                 {suggestedCreators.map((creator) => (
-                  <div key={creator.id} className='flex items-center justify-between'>
-                    <div className='flex items-center gap-3'>
+                  <div
+                    key={creator.id}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
                       <div
                         className={`h-10 w-10 rounded-full overflow-hidden flex items-center justify-center font-semibold ${
-                          creator.imageUrl ? '' : 'bg-gray-100 text-gray-500'
+                          creator.imageUrl ? "" : "bg-gray-100 text-gray-500"
                         }`}
                       >
                         {creator.imageUrl ? (
                           <img
                             src={creator.imageUrl}
                             alt={`${creator.name} avatar`}
-                            className='h-full w-full object-cover'
+                            className="h-full w-full object-cover"
                           />
                         ) : (
                           getInitials(creator.name)
                         )}
                       </div>
                       <div>
-                        <p className='font-medium text-gray-800 text-sm'>{creator.name}</p>
-                        <p className='text-xs text-gray-400 max-w-[160px]'>{creator.description}</p>
+                        <p className="font-medium text-gray-800 text-sm">
+                          {creator.name}
+                        </p>
+                        <p className="text-xs text-gray-400 max-w-[160px]">
+                          {creator.description}
+                        </p>
                       </div>
                     </div>
-                    <button type='button' className='text-xs font-semibold text-blue-500'>Follow</button>
-                </div>
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-blue-500"
+                    >
+                      Follow
+                    </button>
+                  </div>
                 ))}
               </div>
-              <button type='button' className='text-xs text-gray-400 underline'>See all suggestions</button>
+              <button type="button" className="text-xs text-gray-400 underline">
+                See all suggestions
+              </button>
             </div>
 
-            <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-3 text-xs text-gray-400'>
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-3 text-xs text-gray-400">
               <p>© {new Date().getFullYear()} Social Moments</p>
-              <div className='flex gap-3'>
-                <button type='button' className='hover:text-gray-600'>About</button>
-                <button type='button' className='hover:text-gray-600'>Help</button>
-                <button type='button' className='hover:text-gray-600'>API</button>
+              <div className="flex gap-3">
+                <button type="button" className="hover:text-gray-600">
+                  About
+                </button>
+                <button type="button" className="hover:text-gray-600">
+                  Help
+                </button>
+                <button type="button" className="hover:text-gray-600">
+                  API
+                </button>
               </div>
             </div>
           </aside>
@@ -1374,7 +1369,7 @@ export const Home = ({ user, onUserUpdated, onProfileHandlersReady }) => {
         onSubmit={handleSubmitProfileUpdate}
         onClose={handleCloseProfileModal}
         isSaving={isProfileSaving}
-        profileImageUrl={user?.profileImageUrl || ''}
+        profileImageUrl={user?.profileImageUrl || ""}
         profileImagePreview={profileImagePreview}
         removeProfileImage={removeProfileImage}
         onProfileImageSelect={handleProfileImageSelect}
@@ -1384,5 +1379,5 @@ export const Home = ({ user, onUserUpdated, onProfileHandlersReady }) => {
         profileImageInputKey={profileImageInputKey}
       />
     </div>
-  )
-}
+  );
+};
