@@ -32,7 +32,7 @@ export const createPost = async (req, res) => {
     // Fetch the post with populated author information
     const populatedPost = await Post.findById(post._id).populate(
       "author_id",
-      "username email"
+      "username email profileImageUrl"
     );
 
     res.status(201).json({  
@@ -54,7 +54,7 @@ export const createPost = async (req, res) => {
 export const getPosts = async (req, res) => {
   try {
     const posts = await Post.find()
-      .populate("author_id", "username email")
+      .populate("author_id", "username email profileImageUrl")
       .sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -74,7 +74,7 @@ export const getPost = async (req, res) => {
   try {
     const post = await Post.findById(req.params.id).populate(
       "author_id",
-      "username email"
+      "username email profileImageUrl"
     );
 
     if (!post) {
@@ -132,7 +132,7 @@ export const updatePost = async (req, res) => {
     }
 
     const updatedPost = await post.save();
-    await updatedPost.populate("author_id", "username email");
+    await updatedPost.populate("author_id", "username email profileImageUrl");
 
     res.status(200).json({
       message: "Post updated successfully",
@@ -189,7 +189,7 @@ export const deletePost = async (req, res) => {
 export const getMyPosts = async (req, res) => {
   try {
     const posts = await Post.find({ author_id: req.user._id })
-      .populate("author_id", "username email")
+      .populate("author_id", "username email profileImageUrl")
       .sort({ createdAt: -1 });
 
     res.status(200).json({

@@ -59,7 +59,7 @@ const getInitials = (name = '') => {
     .slice(0, 2)
 }
 
-export const Home = ({ user, onUserUpdated }) => {
+export const Home = ({ user, onUserUpdated, onProfileHandlersReady }) => {
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState(null)
@@ -83,6 +83,10 @@ export const Home = ({ user, onUserUpdated }) => {
     email: user?.email || '',
     password: '',
   })
+  const [profileImageFile, setProfileImageFile] = useState(null)
+  const [profileImagePreview, setProfileImagePreview] = useState(null)
+  const [removeProfileImage, setRemoveProfileImage] = useState(false)
+  const [profileImageInputKey, setProfileImageInputKey] = useState(0)
   const fileInputRef = useRef(null)
   const editingFileInputRef = useRef(null)
 
@@ -103,11 +107,28 @@ export const Home = ({ user, onUserUpdated }) => {
   }, [editingImagePreview])
 
   useEffect(() => {
+    return () => {
+      if (profileImagePreview) {
+        URL.revokeObjectURL(profileImagePreview)
+      }
+    }
+  }, [profileImagePreview])
+
+  useEffect(() => {
     setProfileForm({
       username: user?.username || '',
       email: user?.email || '',
       password: '',
     })
+    setProfileImageFile(null)
+    setProfileImagePreview((prev) => {
+      if (prev) {
+        URL.revokeObjectURL(prev)
+      }
+      return null
+    })
+    setRemoveProfileImage(false)
+    setProfileImageInputKey((prev) => prev + 1)
   }, [user])
 
   useEffect(() => {
@@ -160,6 +181,7 @@ export const Home = ({ user, onUserUpdated }) => {
         initials: index === 0 && user ? getInitials(user.username) : `S${index + 1}`,
         isUser: index === 0,
         gradient: getGradientForIndex(index),
+        imageUrl: index === 0 && user ? user.profileImageUrl : undefined,
       }))
     }
 
@@ -169,6 +191,7 @@ export const Home = ({ user, onUserUpdated }) => {
       initials: getInitials(post.author_id?.username || 'C'),
       isUser: post.author_id?._id === user?._id,
       gradient: getGradientForIndex(index),
+      imageUrl: post.author_id?.profileImageUrl,
     }))
   }, [posts, user])
 
@@ -190,6 +213,7 @@ export const Home = ({ user, onUserUpdated }) => {
         id: authorId,
         name: post.author_id?.username || 'Creator',
         description: post.title || 'New on your feed',
+        imageUrl: post.author_id?.profileImageUrl,
       })
       return acc
     }, [])
@@ -284,23 +308,79 @@ export const Home = ({ user, onUserUpdated }) => {
     toast.success('Profile boosted! More people will see your next post.', { icon: '🚀' })
   }
 
-  const handleOpenProfileModal = () => {
+  const clearProfileImageSelection = useCallback((keepRemovalFlag = false) => {
+    setProfileImageFile(null)
+    setProfileImagePreview((prev) => {
+      if (prev) {
+        URL.revokeObjectURL(prev)
+      }
+      return null
+    })
+    setProfileImageInputKey((prev) => prev + 1)
+    if (!keepRemovalFlag) {
+      setRemoveProfileImage(false)
+    }
+  }, [])
+
+  const handleProfileImageSelect = (event) => {
+    const file = event.target.files?.[0]
+
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file (JPG, PNG, etc.).')
+      clearProfileImageSelection()
+      return
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be 5MB or smaller.')
+      clearProfileImageSelection()
+      return
+    }
+
+    setProfileImagePreview((prev) => {
+      if (prev) {
+        URL.revokeObjectURL(prev)
+      }
+      return URL.createObjectURL(file)
+    })
+    setProfileImageFile(file)
+    setRemoveProfileImage(false)
+  }
+
+  const handleClearNewProfileImage = () => {
+    clearProfileImageSelection()
+  }
+
+  const handleRemoveExistingProfileImage = () => {
+    clearProfileImageSelection(true)
+    setRemoveProfileImage(true)
+  }
+
+  const handleUndoRemoveProfileImage = () => {
+    setRemoveProfileImage(false)
+  }
+
+  const handleOpenProfileModal = useCallback(() => {
     setProfileForm({
       username: user?.username || '',
       email: user?.email || '',
       password: '',
     })
+    clearProfileImageSelection()
     setIsProfileModalOpen(true)
-  }
+  }, [user, clearProfileImageSelection])
 
-  const handleCloseProfileModal = () => {
+  const handleCloseProfileModal = useCallback(() => {
     setIsProfileModalOpen(false)
     setProfileForm((prev) => ({
       username: user?.username || prev.username,
       email: user?.email || prev.email,
       password: '',
     }))
-  }
+    clearProfileImageSelection()
+  }, [user, clearProfileImageSelection])
 
   const handleProfileFieldChange = (event) => {
     const { name, value } = event.target
@@ -317,23 +397,31 @@ export const Home = ({ user, onUserUpdated }) => {
       return
     }
 
-    const payload = {
-      username: profileForm.username.trim(),
-      email: profileForm.email.trim(),
-    }
+    const username = profileForm.username.trim()
+    const email = profileForm.email.trim()
 
-    if (!payload.username || !payload.email) {
+    if (!username || !email) {
       toast.error('Username and email are required.')
       return
     }
 
+    const formData = new FormData()
+    formData.append('username', username)
+    formData.append('email', email)
+
     if (profileForm.password.trim()) {
-      payload.password = profileForm.password.trim()
+      formData.append('password', profileForm.password.trim())
+    }
+
+    if (profileImageFile) {
+      formData.append('profileImage', profileImageFile)
+    } else if (removeProfileImage) {
+      formData.append('removeProfileImage', 'true')
     }
 
     try {
       setIsProfileSaving(true)
-      const response = await axios.put('/api/users/me', payload, {
+      const response = await axios.put('/api/users/me', formData, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -352,6 +440,13 @@ export const Home = ({ user, onUserUpdated }) => {
       setIsProfileSaving(false)
     }
   }
+
+  useEffect(() => {
+    onProfileHandlersReady?.({ open: handleOpenProfileModal })
+    return () => {
+      onProfileHandlersReady?.({ open: null })
+    }
+  }, [onProfileHandlersReady, handleOpenProfileModal])
 
   const handleMenuToggle = (event, postId) => {
     event.stopPropagation()
@@ -407,6 +502,10 @@ export const Home = ({ user, onUserUpdated }) => {
       setDeletingPostId(null)
       setOpenMenuId(null)
     }
+  }
+
+  if (!user) {
+    return <Landing />
   }
 
   const handleStartEdit = (post) => {
@@ -561,8 +660,16 @@ export const Home = ({ user, onUserUpdated }) => {
                   className={`relative h-20 w-20 rounded-full p-[3px] bg-linear-to-tr ${story.gradient}`}
                 >
                   <span className='absolute inset-0 rounded-full bg-white/20 blur-sm' />
-                  <span className='relative h-full w-full flex items-center justify-center rounded-full bg-white text-gray-800 font-semibold text-xl'>
-                    {story.initials}
+                  <span className='relative h-full w-full flex items-center justify-center rounded-full bg-white text-gray-800 font-semibold text-xl overflow-hidden'>
+                    {story.imageUrl ? (
+                      <img
+                        src={story.imageUrl}
+                        alt={`${story.name} profile`}
+                        className='h-full w-full object-cover'
+                      />
+                    ) : (
+                      story.initials
+                    )}
                   </span>
                   {story.isUser && (
                     <span className='absolute -bottom-1 -right-1 h-8 w-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-xl'>
@@ -580,8 +687,22 @@ export const Home = ({ user, onUserUpdated }) => {
           <div className='space-y-6'>
             <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 backdrop-blur-sm'>
               <div className='flex gap-3'>
-                <div className='h-12 w-12 rounded-full bg-linear-to-br from-blue-500 to-indigo-500 text-white flex items-center justify-center font-semibold text-lg'>
-                  {getInitials(user.username)}
+                <div
+                  className={`h-12 w-12 rounded-full overflow-hidden flex items-center justify-center font-semibold text-lg ${
+                    user?.profileImageUrl
+                      ? ''
+                      : 'bg-linear-to-br from-blue-500 to-indigo-500 text-white'
+                  }`}
+                >
+                  {user?.profileImageUrl ? (
+                    <img
+                      src={user.profileImageUrl}
+                      alt={`${user.username} avatar`}
+                      className='h-full w-full object-cover'
+                    />
+                  ) : (
+                    getInitials(user.username)
+                  )}
                 </div>
                 <form onSubmit={handleCreatePost} className='flex-1 space-y-4'>
                   <input
@@ -696,6 +817,7 @@ export const Home = ({ user, onUserUpdated }) => {
 
               {posts.map((post, index) => {
                 const authorName = post.author_id?.username || 'Unknown creator'
+                const authorImageUrl = post.author_id?.profileImageUrl
                 const createdLabel = relativeTimeFromNow(post.createdAt)
                 const backgroundGradient = getGradientForIndex(index)
                 const isFavorited = favoritePostIds.has(post._id)
@@ -714,9 +836,21 @@ export const Home = ({ user, onUserUpdated }) => {
                 return (
                   <article key={post._id || index} className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden'>
                     <header className='flex items-center gap-4 px-6 py-4 relative'>
-                      <div className={`h-12 w-12 rounded-full bg-linear-to-br ${backgroundGradient} text-white flex items-center justify-center font-semibold text-lg`}>
-                        {getInitials(authorName)}
-              </div>
+                      <div
+                        className={`h-12 w-12 rounded-full overflow-hidden flex items-center justify-center font-semibold text-lg ${
+                          authorImageUrl ? '' : `bg-linear-to-br ${backgroundGradient} text-white`
+                        }`}
+                      >
+                        {authorImageUrl ? (
+                          <img
+                            src={authorImageUrl}
+                            alt={`${authorName} avatar`}
+                            className='h-full w-full object-cover'
+                          />
+                        ) : (
+                          getInitials(authorName)
+                        )}
+                      </div>
                       <div className='flex-1'>
                         <h3 className='font-semibold text-gray-900'>{authorName}</h3>
                         <p className='text-xs text-gray-500'>{createdLabel}</p>
@@ -921,21 +1055,28 @@ export const Home = ({ user, onUserUpdated }) => {
           <aside className='space-y-6'>
             <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4'>
               <div className='flex items-center gap-3'>
-                <div className='h-12 w-12 rounded-full bg-linear-to-br from-blue-500 to-indigo-500 text-white flex items-center justify-center font-semibold text-lg'>
-                  {getInitials(user.username)}
+                <div
+                  className={`h-12 w-12 rounded-full overflow-hidden flex items-center justify-center font-semibold text-lg ${
+                    user?.profileImageUrl
+                      ? ''
+                      : 'bg-linear-to-br from-blue-500 to-indigo-500 text-white'
+                  }`}
+                >
+                  {user?.profileImageUrl ? (
+                    <img
+                      src={user.profileImageUrl}
+                      alt={`${user.username} avatar`}
+                      className='h-full w-full object-cover'
+                    />
+                  ) : (
+                    getInitials(user.username)
+                  )}
                 </div>
                 <div>
                   <p className='font-semibold text-gray-900'>{user.username}</p>
                   <p className='text-xs text-gray-500'>{user.email}</p>
                 </div>
               </div>
-              <button
-                type='button'
-                onClick={handleOpenProfileModal}
-                className='w-full text-sm font-semibold border border-gray-200 rounded-xl py-2 hover:border-gray-300 transition'
-              >
-                Edit profile
-              </button>
             </div>
 
             <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4'>
@@ -944,10 +1085,22 @@ export const Home = ({ user, onUserUpdated }) => {
                 {suggestedCreators.map((creator) => (
                   <div key={creator.id} className='flex items-center justify-between'>
                     <div className='flex items-center gap-3'>
-                      <div className='h-10 w-10 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center font-semibold'>
-                        {getInitials(creator.name)}
-                </div>
-                <div>
+                      <div
+                        className={`h-10 w-10 rounded-full overflow-hidden flex items-center justify-center font-semibold ${
+                          creator.imageUrl ? '' : 'bg-gray-100 text-gray-500'
+                        }`}
+                      >
+                        {creator.imageUrl ? (
+                          <img
+                            src={creator.imageUrl}
+                            alt={`${creator.name} avatar`}
+                            className='h-full w-full object-cover'
+                          />
+                        ) : (
+                          getInitials(creator.name)
+                        )}
+                      </div>
+                      <div>
                         <p className='font-medium text-gray-800 text-sm'>{creator.name}</p>
                         <p className='text-xs text-gray-400 max-w-[160px]'>{creator.description}</p>
                       </div>
@@ -978,6 +1131,14 @@ export const Home = ({ user, onUserUpdated }) => {
         onSubmit={handleSubmitProfileUpdate}
         onClose={handleCloseProfileModal}
         isSaving={isProfileSaving}
+        profileImageUrl={user?.profileImageUrl || ''}
+        profileImagePreview={profileImagePreview}
+        removeProfileImage={removeProfileImage}
+        onProfileImageSelect={handleProfileImageSelect}
+        onClearNewProfileImage={handleClearNewProfileImage}
+        onRemoveProfileImage={handleRemoveExistingProfileImage}
+        onUndoRemoveProfileImage={handleUndoRemoveProfileImage}
+        profileImageInputKey={profileImageInputKey}
       />
     </div>
   )

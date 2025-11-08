@@ -11,7 +11,15 @@ const authLinks = [
 
 const userLinks = [{ path: '/', label: 'Home' }]
 
-const Navbar = ({ user, onLogout }) => {
+const getInitials = (name = '') =>
+  name
+    .split(' ')
+    .map((chunk) => chunk.charAt(0))
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+
+const Navbar = ({ user, onLogout, onProfileAvatarClick }) => {
   const navigate = useNavigate()
 
   const handleLogout = () => {
@@ -47,7 +55,21 @@ const Navbar = ({ user, onLogout }) => {
             <>
               {renderLinks(userLinks)}
               <div className='nav-divider' />
-              <span className='welcome-text'>Welcome, {user.username}</span>
+              <div className='nav-user'>
+                <button
+                  type='button'
+                  onClick={onProfileAvatarClick}
+                  className={`nav-avatar-button ${user?.profileImageUrl ? 'has-image' : ''}`}
+                  aria-label='Edit profile'
+                >
+                  {user?.profileImageUrl ? (
+                    <img src={user.profileImageUrl} alt={`${user.username} avatar`} className='nav-avatar-image' />
+                  ) : (
+                    getInitials(user.username)
+                  )}
+                </button>
+                <span className='welcome-text'>Welcome, {user.username}</span>
+              </div>
               <button type='button' onClick={handleLogout} className='logout-button'>
                 Logout
               </button>

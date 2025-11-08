@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef } from 'react'
 
 export const ProfileEditModal = ({
   isOpen,
@@ -7,13 +7,54 @@ export const ProfileEditModal = ({
   onSubmit,
   onClose,
   isSaving,
+  profileImageUrl,
+  profileImagePreview,
+  removeProfileImage,
+  onProfileImageSelect,
+  onClearNewProfileImage,
+  onRemoveProfileImage,
+  onUndoRemoveProfileImage,
+  profileImageInputKey,
 }) => {
+  const fileInputRef = useRef(null)
+
   if (!isOpen) return null
 
   const handleOverlayClick = (event) => {
     if (event.target === event.currentTarget) {
       onClose?.()
     }
+  }
+
+  const handleOpenFilePicker = () => {
+    if (isSaving) return
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = (event) => {
+    if (isSaving) return
+    onProfileImageSelect?.(event)
+  }
+
+  const handleClearNewImage = () => {
+    if (isSaving) return
+    onClearNewProfileImage?.()
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const handleRemoveExistingImage = () => {
+    if (isSaving) return
+    onRemoveProfileImage?.()
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const handleUndoRemoveImage = () => {
+    if (isSaving) return
+    onUndoRemoveProfileImage?.()
   }
 
   return (
@@ -36,6 +77,105 @@ export const ProfileEditModal = ({
         </div>
 
         <form onSubmit={onSubmit} className='space-y-4'>
+          <div className='space-y-3'>
+            <label className='text-xs font-semibold uppercase tracking-wide text-gray-500'>
+              Profile photo
+            </label>
+            <div className='border border-dashed border-gray-200 rounded-xl px-4 py-4 bg-gray-50/70'>
+              {profileImagePreview ? (
+                <div className='relative'>
+                  <img
+                    src={profileImagePreview}
+                    alt='New profile preview'
+                    className='w-24 h-24 rounded-full object-cover mx-auto'
+                  />
+                  <div className='flex justify-center gap-2 mt-3'>
+                    <button
+                      type='button'
+                      onClick={handleClearNewImage}
+                      disabled={isSaving}
+                      className='px-3 py-1.5 text-xs font-medium bg-red-500 text-white rounded-full hover:bg-red-600 transition disabled:opacity-60 disabled:cursor-not-allowed'
+                    >
+                      Remove
+                    </button>
+                    <button
+                      type='button'
+                      onClick={handleOpenFilePicker}
+                      disabled={isSaving}
+                      className='px-3 py-1.5 text-xs font-medium bg-white text-gray-700 border border-gray-200 rounded-full hover:bg-gray-100 transition disabled:opacity-60 disabled:cursor-not-allowed'
+                    >
+                      Change
+                    </button>
+                  </div>
+                </div>
+              ) : removeProfileImage ? (
+                <div className='flex flex-col items-center gap-3 text-sm text-gray-500'>
+                  <span className='h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center text-3xl'>
+                    🙂
+                  </span>
+                  <p className='text-center text-xs text-gray-500'>
+                    Your profile photo will be removed after you save changes.
+                  </p>
+                  <button
+                    type='button'
+                    onClick={handleUndoRemoveImage}
+                    disabled={isSaving}
+                    className='px-3 py-1.5 text-xs font-medium bg-white text-gray-700 border border-gray-200 rounded-full hover:bg-gray-100 transition disabled:opacity-60 disabled:cursor-not-allowed'
+                  >
+                    Keep current photo
+                  </button>
+                </div>
+              ) : profileImageUrl ? (
+                <div className='flex flex-col items-center gap-3'>
+                  <img
+                    src={profileImageUrl}
+                    alt='Current profile'
+                    className='w-24 h-24 rounded-full object-cover'
+                  />
+                  <div className='flex gap-2'>
+                    <button
+                      type='button'
+                      onClick={handleOpenFilePicker}
+                      disabled={isSaving}
+                      className='px-3 py-1.5 text-xs font-medium bg-white text-gray-700 border border-gray-200 rounded-full hover:bg-gray-100 transition disabled:opacity-60 disabled:cursor-not-allowed'
+                    >
+                      Change
+                    </button>
+                    <button
+                      type='button'
+                      onClick={handleRemoveExistingImage}
+                      disabled={isSaving}
+                      className='px-3 py-1.5 text-xs font-medium bg-red-500 text-white rounded-full hover:bg-red-600 transition disabled:opacity-60 disabled:cursor-not-allowed'
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type='button'
+                  onClick={handleOpenFilePicker}
+                  disabled={isSaving}
+                  className='flex flex-col items-center justify-center gap-2 text-sm text-gray-500 w-full disabled:opacity-60 disabled:cursor-not-allowed'
+                >
+                  <span className='inline-flex items-center justify-center h-16 w-16 rounded-full bg-white text-gray-400 border border-gray-200 text-2xl'>
+                    📷
+                  </span>
+                  <span className='font-medium'>Upload a profile photo</span>
+                  <span className='text-xs text-gray-400'>JPG, PNG up to 5MB</span>
+                </button>
+              )}
+              <input
+                key={profileImageInputKey}
+                ref={fileInputRef}
+                type='file'
+                name='profileImage'
+                accept='image/*'
+                onChange={handleFileChange}
+                className='hidden'
+              />
+            </div>
+          </div>
           <div className='space-y-2'>
             <label htmlFor='profile-username' className='text-xs font-semibold uppercase tracking-wide text-gray-500'>
               Username

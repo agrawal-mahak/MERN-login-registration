@@ -9,7 +9,7 @@ import Navbar from "./components/Navbar";
 import { Home } from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import  { Toaster } from "react-hot-toast";
 
@@ -19,6 +19,15 @@ function AppContent() {
   const location = useLocation();
   const hasShownToastRef = useRef(false);
   const lastPathRef = useRef('');
+  const profileModalHandlersRef = useRef({});
+
+  const handleProfileAvatarClick = useCallback(() => {
+    profileModalHandlersRef.current?.open?.();
+  }, []);
+
+  const handleRegisterProfileHandlers = useCallback((handlers) => {
+    profileModalHandlersRef.current = handlers || {};
+  }, []);
 
   useEffect(() => {
     const fetchUser = async() => {
@@ -76,9 +85,22 @@ function AppContent() {
   return (
     <>
       <Toaster />
-      <Navbar user={user} onLogout={handleLogout} />
+      <Navbar
+        user={user}
+        onLogout={handleLogout}
+        onProfileAvatarClick={handleProfileAvatarClick}
+      />
       <Routes>
-        <Route path="/" element={<Home user={user} onUserUpdated={setUser} />} />
+        <Route
+          path="/"
+          element={
+            <Home
+              user={user}
+              onUserUpdated={setUser}
+              onProfileHandlersReady={handleRegisterProfileHandlers}
+            />
+          }
+        />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
       </Routes>
