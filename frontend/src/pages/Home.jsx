@@ -1086,7 +1086,7 @@ export const Home = ({ user, onUserUpdated, onProfileHandlersReady }) => {
                               className="flex flex-col items-center justify-center text-sm text-gray-500 gap-2 cursor-pointer hover:text-gray-700"
                               style={{ aspectRatio: "1 / 1" }}
                             >
-                              <span className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-white text-gray-400 border border-gray-200">
+                              <span className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-white text-gray-400 text-2xl border border-gray-200">
                                 📷
                               </span>
                               <span className="font-medium">

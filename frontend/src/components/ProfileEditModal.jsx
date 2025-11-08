@@ -158,7 +158,7 @@ export const ProfileEditModal = ({
                   disabled={isSaving}
                   className='flex flex-col items-center justify-center gap-2 text-sm text-gray-500 w-full disabled:opacity-60 disabled:cursor-not-allowed'
                 >
-                  <span className='inline-flex items-center justify-center h-16 w-16 rounded-full bg-white text-gray-400 border border-gray-200 text-2xl'>
+                  <span className='inline-flex items-center justify-center h-14 w-14 rounded-full bg-white text-gray-400 border border-gray-200 text-2xl'>
                     📷
                   </span>
                   <span className='font-medium'>Upload a profile photo</span>
