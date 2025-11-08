@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import axios from 'axios'
+import { registerUser } from '../api/userApi'
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -26,10 +26,10 @@ const Register = () => {
     setLoading(true)
 
     try {
-      const response = await axios.post('/api/users/register', formData)
+      const data = await registerUser(formData)
       
       // Store token in localStorage
-      localStorage.setItem('token', response.data.token)
+      localStorage.setItem('token', data.token)
       
       // Redirect to home page
       // The App.jsx useEffect will automatically fetch user data on navigation
@@ -46,7 +46,7 @@ const Register = () => {
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Create your account
+            Get started on Photogram
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
             Or{' '}
@@ -54,7 +54,7 @@ const Register = () => {
               to="/login"
               className="font-medium text-indigo-600 hover:text-indigo-500"
             >
-              sign in to your existing account
+              Sign in to see photos and videos from your friends.
             </Link>
           </p>
         </div>

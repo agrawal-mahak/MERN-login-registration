@@ -9,6 +9,7 @@ A full-stack authentication application built with the MERN (MongoDB, Express, R
 - **JWT Authentication** - Token-based authentication system
 - **Protected Routes** - Secure access to authenticated pages
 - **Password Hashing** - Passwords are securely hashed using bcrypt
+- **Post Management** - Create, read, update, and delete posts with optional Cloudinary-hosted images
 - **Toast Notifications** - User-friendly notifications using react-hot-toast
 - **Responsive Design** - Modern UI built with Tailwind CSS
 - **Logout Functionality** - Secure session termination
@@ -31,6 +32,8 @@ A full-stack authentication application built with the MERN (MongoDB, Express, R
 - **JWT** 9.0.2 - JSON Web Tokens for authentication
 - **bcryptjs** 3.0.3 - Password hashing
 - **dotenv** 17.2.3 - Environment variables
+- **Cloudinary** 2.5.1 - Media storage and delivery
+- **Multer** 1.4.5-lts.1 - `multipart/form-data` parsing for image uploads
 
 ## 📁 Project Structure
 
@@ -38,13 +41,17 @@ A full-stack authentication application built with the MERN (MongoDB, Express, R
 login_fullstack/
 ├── backend/
 │   ├── config/
+│   │   ├── cloudinary.js      # Cloudinary configuration and helpers
 │   │   └── db.js              # MongoDB connection
 │   ├── middleware/
-│   │   └── auth.js            # JWT authentication middleware
+│   │   ├── auth.js            # JWT authentication middleware
+│   │   └── upload.js          # Multer middleware for image uploads
 │   ├── models/
+│   │   ├── Post.js            # Post schema and model
 │   │   └── User.js            # User schema and model
 │   ├── routes/
-│   │   └── auth.js            # Authentication routes
+│   │   ├── auth.js            # Authentication routes
+│   │   └── post.js            # Post CRUD routes
 │   └── server.js              # Express server setup
 ├── frontend/
 │   ├── public/
@@ -99,11 +106,11 @@ Before you begin, ensure you have the following installed:
    MONGO_URI=your_mongodb_connection_string
    JWT_SECRET=your_jwt_secret_key
    PORT=3000
+   CLOUDINARY_CLOUD_NAME=your_cloud_name
+   CLOUDINARY_API_KEY=your_api_key
+   CLOUDINARY_API_SECRET=your_api_secret
    ```
 
-   **Example MongoDB connection string:**
-   - Local: `mongodb://localhost:27017/login_app`
-   - Atlas: `mongodb+srv://username:password@cluster.mongodb.net/login_app`
 
 5. **Create a `.env` file in the root** (if needed for additional configuration)
 
@@ -172,6 +179,45 @@ Before you begin, ensure you have the following installed:
 - **Headers:** `Authorization: Bearer <token>`
 - **Response:** Current user object (without password)
 
+### Post Routes (`/api/posts`)
+
+All post routes that modify data require the `Authorization: Bearer <token>` header.
+
+#### Create Post (Protected)
+- **POST** `/api/posts`
+- **Headers:** `Content-Type: multipart/form-data`
+- **Body:**
+  - `title` (string, required)
+  - `content` (string, required)
+  - `image` (file, optional)
+- **Response:** Created post with populated author and optional `imageUrl`
+
+#### Get All Posts
+- **GET** `/api/posts`
+- **Response:** Array of posts sorted by most recent
+
+#### Get Current User Posts (Protected)
+- **GET** `/api/posts/my/posts`
+- **Response:** Posts authored by the authenticated user
+
+#### Get Post By ID
+- **GET** `/api/posts/:id`
+- **Response:** Single post object
+
+#### Update Post (Protected)
+- **PUT** `/api/posts/:id`
+- **Headers:** `Content-Type: multipart/form-data`
+- **Body:**
+  - `title` (string, optional)
+  - `content` (string, optional)
+  - `image` (file, optional) – uploading a new image replaces the previous one
+  - `removeImage` (boolean/string, optional) – set to `true` to remove the current image without replacing it
+- **Response:** Updated post object
+
+#### Delete Post (Protected)
+- **DELETE** `/api/posts/:id`
+- **Response:** Success message; associated Cloudinary image (if any) is removed
+
 ## 🔐 Authentication Flow
 
 1. **Registration/Login**: User submits credentials
@@ -203,6 +249,9 @@ Before you begin, ensure you have the following installed:
 MONGO_URI=your_mongodb_connection_string
 JWT_SECRET=your_secret_key_here
 PORT=3000
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
 ```
 
 ### Frontend
@@ -241,6 +290,8 @@ The frontend uses Vite's proxy configuration to forward `/api` requests to the b
 - `jsonwebtoken` - JWT implementation
 - `bcryptjs` - Password hashing
 - `dotenv` - Environment variables
+- `cloudinary` - Image hosting and transformation
+- `multer` - Multipart form-data parsing for uploads
 
 ### Frontend
 - `react` - UI library
@@ -248,32 +299,4 @@ The frontend uses Vite's proxy configuration to forward `/api` requests to the b
 - `axios` - HTTP client
 - `tailwindcss` - CSS framework
 - `react-hot-toast` - Notifications
-- `vite` - Build tool
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the ISC License.
-
-## 👤 Author
-
-Your Name - [Your GitHub](https://github.com/yourusername)
-
-## 🙏 Acknowledgments
-
-- React team for the amazing framework
-- Express.js for the robust backend framework
-- MongoDB for the flexible database solution
-- Tailwind CSS for the utility-first CSS framework
-
----
-
-**Note:** Make sure to never commit your `.env` files to version control. The `.gitignore` file is configured to exclude these files.
-
+- `vite`

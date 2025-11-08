@@ -1,8 +1,25 @@
 import React from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import './Navbar.css'
 
-const Navbar = ({ user, onLogout }) => {
+const authLinks = [
+  { path: '/', label: 'Home' },
+  { path: '/login', label: 'Login' },
+  { path: '/register', label: 'Register' },
+]
+
+const userLinks = [{ path: '/', label: 'Home' }]
+
+const getInitials = (name = '') =>
+  name
+    .split(' ')
+    .map((chunk) => chunk.charAt(0))
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+
+const Navbar = ({ user, onLogout, onProfileAvatarClick }) => {
   const navigate = useNavigate()
 
   const handleLogout = () => {
@@ -11,31 +28,54 @@ const Navbar = ({ user, onLogout }) => {
     navigate('/login')
   }
 
+  const renderLinks = (links) =>
+    links.map((link) => (
+      <NavLink
+        key={link.path}
+        to={link.path}
+        className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}
+        end={link.path === '/'}
+      >
+        {link.label}
+      </NavLink>
+    ))
+
   return (
-    <nav className="bg-gray-800 text-white p-4">
-      <div className="container mx-auto flex justify-between items-center">
-        <Link to="/" className="text-xl font-bold">
-          Logo
-        </Link>
-        <div className="space-x-4 flex items-center">
+    <nav className='glass-nav'>
+      <div className='nav-wrapper'>
+        <NavLink to='/' className='brand'>
+          <span className='brand-icon'>
+            <span className='brand-icon-inner'>PG</span>
+          </span>
+          <span className='brand-text'>Moments</span>
+        </NavLink>
+
+        <div className='nav-items'>
           {user ? (
             <>
-              <Link to="/" className="hover:text-gray-300">Home</Link>
-              <span className="text-gray-400">|</span>
-              <span className="text-gray-300">Welcome, {user.username}</span>
-              <button
-                onClick={handleLogout}
-                className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded transition-colors"
-              >
+              {renderLinks(userLinks)}
+              <div className='nav-divider' />
+              <div className='nav-user'>
+                <button
+                  type='button'
+                  onClick={onProfileAvatarClick}
+                  className={`nav-avatar-button ${user?.profileImageUrl ? 'has-image' : ''}`}
+                  aria-label='Edit profile'
+                >
+                  {user?.profileImageUrl ? (
+                    <img src={user.profileImageUrl} alt={`${user.username} avatar`} className='nav-avatar-image' />
+                  ) : (
+                    getInitials(user.username)
+                  )}
+                </button>
+                <span className='welcome-text'>Welcome, {user.username}</span>
+              </div>
+              <button type='button' onClick={handleLogout} className='logout-button'>
                 Logout
               </button>
             </>
           ) : (
-            <>
-              <Link to="/" className="hover:text-gray-300">Home</Link>
-              <Link to="/login" className="hover:text-gray-300">Login</Link>
-              <Link to="/register" className="hover:text-gray-300">Register</Link>
-            </>
+            renderLinks(authLinks)
           )}
         </div>
       </div>

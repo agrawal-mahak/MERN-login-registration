@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import axios from 'axios'
+import { loginUser } from '../api/userApi'
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -25,10 +25,10 @@ const Login = () => {
     setLoading(true)
 
     try {
-      const response = await axios.post('/api/users/login', formData)
+      const data = await loginUser(formData)
       
       // Store token in localStorage
-      localStorage.setItem('token', response.data.token)
+      localStorage.setItem('token', data.token)
       
       // Redirect to home page
       // The App.jsx useEffect will automatically fetch user data on navigation
@@ -45,7 +45,7 @@ const Login = () => {
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Sign in to your account
+            Sign in to Photogram 
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
             Or{' '}
